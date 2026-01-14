@@ -18,6 +18,8 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.progress': '進度追蹤',
     'nav.profile': '個人資料',
     'nav.leaderboard': '排行榜',
+    'nav.checkin': '每日簽到',
+    'nav.community': '學習社群',
     
     // Home page
     'home.title': '絕技長笛 RPG',
@@ -298,6 +300,8 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.progress': 'Progress',
     'nav.profile': 'Profile',
     'nav.leaderboard': 'Leaderboard',
+    'nav.checkin': 'Check-In',
+    'nav.community': 'Community',
     
     // Home page
     'home.title': 'Beatbox Flute RPG',

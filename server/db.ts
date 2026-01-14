@@ -6,7 +6,11 @@ import {
   userProgress, InsertUserProgress,
   achievements, InsertAchievement,
   userAchievements, InsertUserAchievement,
-  notifications, InsertNotification
+  notifications, InsertNotification,
+  dailyCheckIns, InsertDailyCheckIn,
+  communityPosts, InsertCommunityPost,
+  postComments, InsertPostComment,
+  postLikes, InsertPostLike
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -808,4 +812,485 @@ export async function getUnreadNotificationCount(userId: number) {
     ));
 
   return result?.count ?? 0;
+}
+
+
+// ============ Daily Check-In Functions ============
+
+/**
+ * Get today's date string in YYYY-MM-DD format
+ */
+function getTodayDateString(): string {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+}
+
+/**
+ * Get yesterday's date string in YYYY-MM-DD format
+ */
+function getYesterdayDateString(): string {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return yesterday.toISOString().split('T')[0];
+}
+
+/**
+ * Check if user has already checked in today
+ */
+export async function hasCheckedInToday(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) {
+    return false;
+  }
+
+  const today = getTodayDateString();
+  const [existing] = await db
+    .select()
+    .from(dailyCheckIns)
+    .where(and(
+      eq(dailyCheckIns.userId, userId),
+      eq(dailyCheckIns.checkInDate, today)
+    ))
+    .limit(1);
+
+  return !!existing;
+}
+
+/**
+ * Get user's current streak count
+ */
+export async function getUserStreak(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) {
+    return 0;
+  }
+
+  // Get the most recent check-in
+  const [lastCheckIn] = await db
+    .select()
+    .from(dailyCheckIns)
+    .where(eq(dailyCheckIns.userId, userId))
+    .orderBy(desc(dailyCheckIns.checkInDate))
+    .limit(1);
+
+  if (!lastCheckIn) {
+    return 0;
+  }
+
+  const today = getTodayDateString();
+  const yesterday = getYesterdayDateString();
+
+  // If last check-in was today, return the streak
+  if (lastCheckIn.checkInDate === today) {
+    return lastCheckIn.streakCount;
+  }
+
+  // If last check-in was yesterday, streak continues
+  if (lastCheckIn.checkInDate === yesterday) {
+    return lastCheckIn.streakCount;
+  }
+
+  // Streak is broken
+  return 0;
+}
+
+/**
+ * Perform daily check-in for a user
+ */
+export async function performCheckIn(userId: number): Promise<{
+  success: boolean;
+  xpEarned: number;
+  streakCount: number;
+  isNewStreak: boolean;
+}> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const today = getTodayDateString();
+  
+  // Check if already checked in today
+  const alreadyCheckedIn = await hasCheckedInToday(userId);
+  if (alreadyCheckedIn) {
+    const currentStreak = await getUserStreak(userId);
+    return {
+      success: false,
+      xpEarned: 0,
+      streakCount: currentStreak,
+      isNewStreak: false,
+    };
+  }
+
+  // Get current streak
+  const currentStreak = await getUserStreak(userId);
+  const newStreak = currentStreak + 1;
+
+  // Calculate XP with streak bonus
+  // Base: 10 XP, +5 XP per streak day (max bonus: 50 XP at 10+ days)
+  const baseXp = 10;
+  const streakBonus = Math.min(newStreak - 1, 10) * 5;
+  const totalXp = baseXp + streakBonus;
+
+  // Insert check-in record
+  await db.insert(dailyCheckIns).values({
+    userId,
+    checkInDate: today,
+    streakCount: newStreak,
+    xpEarned: totalXp,
+  });
+
+  return {
+    success: true,
+    xpEarned: totalXp,
+    streakCount: newStreak,
+    isNewStreak: newStreak === 1,
+  };
+}
+
+/**
+ * Get user's check-in history for calendar display
+ */
+export async function getCheckInHistory(userId: number, days: number = 30): Promise<{
+  date: string;
+  streakCount: number;
+  xpEarned: number;
+}[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startDateStr = startDate.toISOString().split('T')[0];
+
+  const result = await db
+    .select({
+      date: dailyCheckIns.checkInDate,
+      streakCount: dailyCheckIns.streakCount,
+      xpEarned: dailyCheckIns.xpEarned,
+    })
+    .from(dailyCheckIns)
+    .where(and(
+      eq(dailyCheckIns.userId, userId),
+      sql`${dailyCheckIns.checkInDate} >= ${startDateStr}`
+    ))
+    .orderBy(desc(dailyCheckIns.checkInDate));
+
+  return result.map(r => ({
+    date: r.date,
+    streakCount: r.streakCount,
+    xpEarned: r.xpEarned,
+  }));
+}
+
+/**
+ * Get user's total check-in stats
+ */
+export async function getCheckInStats(userId: number): Promise<{
+  totalCheckIns: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalXpFromCheckIns: number;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalCheckIns: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      totalXpFromCheckIns: 0,
+    };
+  }
+
+  const [stats] = await db
+    .select({
+      totalCheckIns: sql<number>`COUNT(*)`,
+      longestStreak: sql<number>`MAX(${dailyCheckIns.streakCount})`,
+      totalXpFromCheckIns: sql<number>`SUM(${dailyCheckIns.xpEarned})`,
+    })
+    .from(dailyCheckIns)
+    .where(eq(dailyCheckIns.userId, userId));
+
+  const currentStreak = await getUserStreak(userId);
+
+  return {
+    totalCheckIns: stats?.totalCheckIns ?? 0,
+    currentStreak,
+    longestStreak: stats?.longestStreak ?? 0,
+    totalXpFromCheckIns: stats?.totalXpFromCheckIns ?? 0,
+  };
+}
+
+
+// ============ Community Post Functions ============
+
+/**
+ * Create a new community post
+ */
+export async function createCommunityPost(data: {
+  userId: number;
+  content: string;
+  imageUrl?: string;
+  questId?: string;
+  postType?: "experience" | "question" | "achievement" | "encouragement";
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.insert(communityPosts).values({
+    userId: data.userId,
+    content: data.content,
+    imageUrl: data.imageUrl ?? null,
+    questId: data.questId ?? null,
+    postType: data.postType ?? "experience",
+  });
+
+  return { id: Number(result[0].insertId) };
+}
+
+/**
+ * Get community posts with pagination
+ */
+export async function getCommunityPosts(options: {
+  limit?: number;
+  offset?: number;
+  postType?: string;
+}) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  const limit = options.limit ?? 20;
+  const offset = options.offset ?? 0;
+
+  let query = db
+    .select({
+      id: communityPosts.id,
+      userId: communityPosts.userId,
+      content: communityPosts.content,
+      imageUrl: communityPosts.imageUrl,
+      questId: communityPosts.questId,
+      postType: communityPosts.postType,
+      likes: communityPosts.likes,
+      commentCount: communityPosts.commentCount,
+      createdAt: communityPosts.createdAt,
+      updatedAt: communityPosts.updatedAt,
+      userName: users.name,
+      userRole: users.role,
+    })
+    .from(communityPosts)
+    .leftJoin(users, eq(communityPosts.userId, users.id))
+    .orderBy(desc(communityPosts.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  if (options.postType && options.postType !== 'all') {
+    return await db
+      .select({
+        id: communityPosts.id,
+        userId: communityPosts.userId,
+        content: communityPosts.content,
+        imageUrl: communityPosts.imageUrl,
+        questId: communityPosts.questId,
+        postType: communityPosts.postType,
+        likes: communityPosts.likes,
+        commentCount: communityPosts.commentCount,
+        createdAt: communityPosts.createdAt,
+        updatedAt: communityPosts.updatedAt,
+        userName: users.name,
+        userRole: users.role,
+      })
+      .from(communityPosts)
+      .leftJoin(users, eq(communityPosts.userId, users.id))
+      .where(eq(communityPosts.postType, options.postType as "experience" | "question" | "achievement" | "encouragement"))
+      .orderBy(desc(communityPosts.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  return await query;
+}
+
+/**
+ * Get a single post by ID
+ */
+export async function getPostById(postId: number) {
+  const db = await getDb();
+  if (!db) {
+    return null;
+  }
+
+  const [post] = await db
+    .select({
+      id: communityPosts.id,
+      userId: communityPosts.userId,
+      content: communityPosts.content,
+      imageUrl: communityPosts.imageUrl,
+      questId: communityPosts.questId,
+      postType: communityPosts.postType,
+      likes: communityPosts.likes,
+      commentCount: communityPosts.commentCount,
+      createdAt: communityPosts.createdAt,
+      updatedAt: communityPosts.updatedAt,
+      userName: users.name,
+      userRole: users.role,
+    })
+    .from(communityPosts)
+    .leftJoin(users, eq(communityPosts.userId, users.id))
+    .where(eq(communityPosts.id, postId))
+    .limit(1);
+
+  return post || null;
+}
+
+/**
+ * Like or unlike a post
+ */
+export async function togglePostLike(postId: number, userId: number): Promise<{
+  liked: boolean;
+  newLikeCount: number;
+}> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Check if already liked
+  const [existing] = await db
+    .select()
+    .from(postLikes)
+    .where(and(
+      eq(postLikes.postId, postId),
+      eq(postLikes.userId, userId)
+    ))
+    .limit(1);
+
+  if (existing) {
+    // Unlike
+    await db.delete(postLikes).where(eq(postLikes.id, existing.id));
+    await db.update(communityPosts)
+      .set({ likes: sql`${communityPosts.likes} - 1` })
+      .where(eq(communityPosts.id, postId));
+
+    const [post] = await db.select({ likes: communityPosts.likes }).from(communityPosts).where(eq(communityPosts.id, postId));
+    return { liked: false, newLikeCount: post?.likes ?? 0 };
+  } else {
+    // Like
+    await db.insert(postLikes).values({ postId, userId });
+    await db.update(communityPosts)
+      .set({ likes: sql`${communityPosts.likes} + 1` })
+      .where(eq(communityPosts.id, postId));
+
+    const [post] = await db.select({ likes: communityPosts.likes }).from(communityPosts).where(eq(communityPosts.id, postId));
+    return { liked: true, newLikeCount: post?.likes ?? 0 };
+  }
+}
+
+/**
+ * Check if user has liked a post
+ */
+export async function hasUserLikedPost(postId: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) {
+    return false;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(postLikes)
+    .where(and(
+      eq(postLikes.postId, postId),
+      eq(postLikes.userId, userId)
+    ))
+    .limit(1);
+
+  return !!existing;
+}
+
+/**
+ * Add a comment to a post
+ */
+export async function addPostComment(data: {
+  postId: number;
+  userId: number;
+  content: string;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.insert(postComments).values({
+    postId: data.postId,
+    userId: data.userId,
+    content: data.content,
+  });
+
+  // Update comment count
+  await db.update(communityPosts)
+    .set({ commentCount: sql`${communityPosts.commentCount} + 1` })
+    .where(eq(communityPosts.id, data.postId));
+
+  return { id: Number(result[0].insertId) };
+}
+
+/**
+ * Get comments for a post
+ */
+export async function getPostComments(postId: number) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db
+    .select({
+      id: postComments.id,
+      postId: postComments.postId,
+      userId: postComments.userId,
+      content: postComments.content,
+      createdAt: postComments.createdAt,
+      userName: users.name,
+      userRole: users.role,
+    })
+    .from(postComments)
+    .leftJoin(users, eq(postComments.userId, users.id))
+    .where(eq(postComments.postId, postId))
+    .orderBy(postComments.createdAt);
+}
+
+/**
+ * Delete a community post
+ */
+export async function deleteCommunityPost(postId: number, userId: number, isAdmin: boolean) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const [post] = await db
+    .select()
+    .from(communityPosts)
+    .where(eq(communityPosts.id, postId))
+    .limit(1);
+
+  if (!post) {
+    throw new Error("Post not found");
+  }
+
+  if (post.userId !== userId && !isAdmin) {
+    throw new Error("Not authorized to delete this post");
+  }
+
+  // Delete likes and comments first
+  await db.delete(postLikes).where(eq(postLikes.postId, postId));
+  await db.delete(postComments).where(eq(postComments.postId, postId));
+  await db.delete(communityPosts).where(eq(communityPosts.id, postId));
+
+  return { success: true };
 }

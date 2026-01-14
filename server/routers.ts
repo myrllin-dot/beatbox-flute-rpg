@@ -32,6 +32,21 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   getUnreadNotificationCount,
+  // Check-in
+  hasCheckedInToday,
+  getUserStreak,
+  performCheckIn,
+  getCheckInHistory,
+  getCheckInStats,
+  // Community
+  createCommunityPost,
+  getCommunityPosts,
+  getPostById,
+  togglePostLike,
+  hasUserLikedPost,
+  addPostComment,
+  getPostComments,
+  deleteCommunityPost,
 } from "./db";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -336,6 +351,157 @@ export const appRouter = router({
     markAllRead: protectedProcedure
       .mutation(async ({ ctx }) => {
         return await markAllNotificationsRead(ctx.user.id);
+      }),
+  }),
+
+  // Daily Check-in API
+  checkIn: router({
+    // Check if user has checked in today
+    status: protectedProcedure
+      .query(async ({ ctx }) => {
+        const checkedIn = await hasCheckedInToday(ctx.user.id);
+        const streak = await getUserStreak(ctx.user.id);
+        return { checkedInToday: checkedIn, currentStreak: streak };
+      }),
+
+    // Perform daily check-in
+    perform: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const result = await performCheckIn(ctx.user.id);
+        
+        // Create notification for successful check-in
+        if (result.success) {
+          await createNotification({
+            userId: ctx.user.id,
+            type: 'achievement',
+            titleZh: '簽到成功！',
+            titleEn: 'Check-in Successful!',
+            messageZh: `連續簽到 ${result.streakCount} 天，獲得 ${result.xpEarned} XP！`,
+            messageEn: `${result.streakCount} day streak! Earned ${result.xpEarned} XP!`,
+            relatedId: 'checkin',
+          });
+
+          // Check for streak achievements
+          if (result.streakCount === 7) {
+            try {
+              const achResult = await awardAchievement(ctx.user.id, 'week_streak');
+              if (!achResult.alreadyEarned) {
+                await createNotification({
+                  userId: ctx.user.id,
+                  type: 'achievement',
+                  titleZh: '獲得成就！',
+                  titleEn: 'Achievement Unlocked!',
+                  messageZh: `你獲得了「${achResult.achievement.nameZh}」成就！`,
+                  messageEn: `You earned the "${achResult.achievement.nameEn}" achievement!`,
+                  relatedId: achResult.achievement.code,
+                });
+              }
+            } catch (e) {
+              // Achievement might not exist yet
+            }
+          }
+        }
+
+        return result;
+      }),
+
+    // Get check-in history
+    history: protectedProcedure
+      .input(z.object({ days: z.number().min(7).max(365).optional() }))
+      .query(async ({ input, ctx }) => {
+        return await getCheckInHistory(ctx.user.id, input.days || 30);
+      }),
+
+    // Get check-in stats
+    stats: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getCheckInStats(ctx.user.id);
+      }),
+  }),
+
+  // Community Posts API
+  community: router({
+    // Get community posts
+    list: publicProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(50).optional(),
+        offset: z.number().min(0).optional(),
+        postType: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await getCommunityPosts({
+          limit: input.limit,
+          offset: input.offset,
+          postType: input.postType,
+        });
+      }),
+
+    // Get single post
+    get: publicProcedure
+      .input(z.object({ postId: z.number() }))
+      .query(async ({ input }) => {
+        return await getPostById(input.postId);
+      }),
+
+    // Create a new post
+    create: protectedProcedure
+      .input(z.object({
+        content: z.string().min(1).max(2000),
+        imageUrl: z.string().optional(),
+        questId: z.string().optional(),
+        postType: z.enum(['experience', 'question', 'achievement', 'encouragement']).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await createCommunityPost({
+          userId: ctx.user.id,
+          content: input.content,
+          imageUrl: input.imageUrl,
+          questId: input.questId,
+          postType: input.postType,
+        });
+      }),
+
+    // Toggle like on a post
+    toggleLike: protectedProcedure
+      .input(z.object({ postId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await togglePostLike(input.postId, ctx.user.id);
+      }),
+
+    // Check if user liked a post
+    hasLiked: protectedProcedure
+      .input(z.object({ postId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return await hasUserLikedPost(input.postId, ctx.user.id);
+      }),
+
+    // Get comments for a post
+    comments: publicProcedure
+      .input(z.object({ postId: z.number() }))
+      .query(async ({ input }) => {
+        return await getPostComments(input.postId);
+      }),
+
+    // Add comment to a post
+    addComment: protectedProcedure
+      .input(z.object({
+        postId: z.number(),
+        content: z.string().min(1).max(1000),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await addPostComment({
+          postId: input.postId,
+          userId: ctx.user.id,
+          content: input.content,
+        });
+      }),
+
+    // Delete a post
+    delete: protectedProcedure
+      .input(z.object({ postId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const isAdmin = ctx.user.role === 'admin';
+        return await deleteCommunityPost(input.postId, ctx.user.id, isAdmin);
       }),
   }),
 });

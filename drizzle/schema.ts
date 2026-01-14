@@ -191,3 +191,84 @@ export const notifications = mysqlTable("notifications", {
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
+
+
+/**
+ * Daily check-ins table to track user attendance
+ * Stores daily check-in records for streak bonuses
+ */
+export const dailyCheckIns = mysqlTable("dailyCheckIns", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the user */
+  userId: int("userId").notNull(),
+  /** The date of check-in (stored as date string YYYY-MM-DD) */
+  checkInDate: varchar("checkInDate", { length: 10 }).notNull(),
+  /** Current streak count at time of check-in */
+  streakCount: int("streakCount").default(1).notNull(),
+  /** XP earned from this check-in (includes streak bonus) */
+  xpEarned: int("xpEarned").default(10).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DailyCheckIn = typeof dailyCheckIns.$inferSelect;
+export type InsertDailyCheckIn = typeof dailyCheckIns.$inferInsert;
+
+/**
+ * Community posts table for sharing practice experiences
+ * Stores user posts in the learning community
+ */
+export const communityPosts = mysqlTable("communityPosts", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the user who created the post */
+  userId: int("userId").notNull(),
+  /** Post content */
+  content: text("content").notNull(),
+  /** Optional image URL */
+  imageUrl: text("imageUrl"),
+  /** Optional related quest ID */
+  questId: varchar("questId", { length: 32 }),
+  /** Post type: experience, question, achievement, encouragement */
+  postType: mysqlEnum("postType", ["experience", "question", "achievement", "encouragement"]).default("experience").notNull(),
+  /** Number of likes */
+  likes: int("likes").default(0).notNull(),
+  /** Number of comments */
+  commentCount: int("commentCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CommunityPost = typeof communityPosts.$inferSelect;
+export type InsertCommunityPost = typeof communityPosts.$inferInsert;
+
+/**
+ * Community post comments table
+ * Stores comments on community posts
+ */
+export const postComments = mysqlTable("postComments", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the post */
+  postId: int("postId").notNull(),
+  /** Reference to the user who commented */
+  userId: int("userId").notNull(),
+  /** Comment content */
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PostComment = typeof postComments.$inferSelect;
+export type InsertPostComment = typeof postComments.$inferInsert;
+
+/**
+ * Post likes table to track who liked which posts
+ */
+export const postLikes = mysqlTable("postLikes", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the post */
+  postId: int("postId").notNull(),
+  /** Reference to the user who liked */
+  userId: int("userId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PostLike = typeof postLikes.$inferSelect;
+export type InsertPostLike = typeof postLikes.$inferInsert;

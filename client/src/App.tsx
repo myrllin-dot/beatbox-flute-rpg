@@ -13,6 +13,8 @@ import Progress from "./pages/Progress";
 import Profile from "./pages/Profile";
 import InstructorDashboard from "./pages/InstructorDashboard";
 import Leaderboard from "./pages/Leaderboard";
+import CheckIn from "./pages/CheckIn";
+import Community from "./pages/Community";
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
@@ -25,6 +27,8 @@ function Router() {
       <Route path="/profile" component={Profile} />
       <Route path="/instructor" component={InstructorDashboard} />
       <Route path="/leaderboard" component={Leaderboard} />
+      <Route path="/checkin" component={CheckIn} />
+      <Route path="/community" component={Community} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
