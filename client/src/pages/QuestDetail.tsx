@@ -1,107 +1,102 @@
 /**
  * Quest Detail Page
  * Design: Arcane Academy - Immersive quest experience with video player
- * Features: Video tutorial, step-by-step guide, progress tracking
+ * Features: Video tutorial, step-by-step guide, progress tracking, metronome, recorder
  */
 
 import { Link, useParams } from 'wouter';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Play, CheckCircle, Clock, Music, Target, Award, Upload, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle, Clock, Music, Target, Award, Upload, MessageCircle, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Navigation from '@/components/Navigation';
 import { Progress } from '@/components/ui/progress';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Metronome from '@/components/Metronome';
+import AudioRecorder from '@/components/AudioRecorder';
 
 interface QuestStep {
   id: number;
-  title: string;
-  description: string;
+  titleKey: string;
+  descKey: string;
   completed: boolean;
 }
 
-// Mock quest data
-const questData: Record<string, {
-  title: string;
-  description: string;
+interface QuestData {
+  titleKey: string;
+  descKey: string;
   videoUrl: string;
-  duration: string;
-  difficulty: string;
+  duration: number;
+  difficulty: 'easy' | 'medium' | 'hard';
   steps: QuestStep[];
-  tips: string[];
-}> = {
+  tipKeys: string[];
+  showMetronome?: boolean;
+}
+
+// Quest data with translation keys
+const questData: Record<string, QuestData> = {
   '1-1': {
-    title: '基礎氣息控制',
-    description: '學習穩定的氣息控制，這是所有長笛技巧的基礎。掌握正確的呼吸方式和氣流控制。透過本課程，你將學會如何運用腹式呼吸來產生穩定且持久的氣流。',
+    titleKey: 'quest.1-1.title',
+    descKey: 'quest.1-1.description',
     videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    duration: '15分鐘',
-    difficulty: '簡單',
+    duration: 15,
+    difficulty: 'easy',
     steps: [
-      { id: 1, title: '觀看教學影片', description: '完整觀看氣息控制教學影片', completed: true },
-      { id: 2, title: '腹式呼吸練習', description: '練習腹式呼吸 10 分鐘', completed: true },
-      { id: 3, title: '長音練習', description: '嘗試吹奏穩定的長音 30 秒', completed: false },
-      { id: 4, title: '上傳練習影片', description: '錄製並上傳你的練習成果', completed: false },
+      { id: 1, titleKey: 'quest.1-1.step1', descKey: 'quest.1-1.step1.desc', completed: true },
+      { id: 2, titleKey: 'quest.1-1.step2', descKey: 'quest.1-1.step2.desc', completed: true },
+      { id: 3, titleKey: 'quest.1-1.step3', descKey: 'quest.1-1.step3.desc', completed: false },
+      { id: 4, titleKey: 'quest.1-1.step4', descKey: 'quest.1-1.step4.desc', completed: false },
     ],
-    tips: [
-      '放鬆肩膀，讓氣息自然流動',
-      '想像氣息從腹部緩緩上升',
-      '保持嘴型穩定，不要過度用力',
-      '每天練習 15-20 分鐘效果最佳',
-    ],
+    tipKeys: ['quest.1-1.tip1', 'quest.1-1.tip2', 'quest.1-1.tip3', 'quest.1-1.tip4'],
   },
   '1-2': {
-    title: '音色穩定訓練',
-    description: '透過持續的長音練習，建立穩定且飽滿的音色。學習如何保持音準和音質。',
+    titleKey: 'quest.1-2.title',
+    descKey: 'quest.1-2.description',
     videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    duration: '20分鐘',
-    difficulty: '簡單',
+    duration: 20,
+    difficulty: 'easy',
     steps: [
-      { id: 1, title: '觀看教學影片', description: '完整觀看音色訓練教學影片', completed: true },
-      { id: 2, title: '音階練習', description: '練習基礎音階', completed: true },
-      { id: 3, title: '長音持續練習', description: '每個音保持 10 秒', completed: false },
-      { id: 4, title: '上傳練習影片', description: '錄製並上傳你的練習成果', completed: false },
+      { id: 1, titleKey: 'quest.1-2.step1', descKey: 'quest.1-2.step1.desc', completed: true },
+      { id: 2, titleKey: 'quest.1-2.step2', descKey: 'quest.1-2.step2.desc', completed: true },
+      { id: 3, titleKey: 'quest.1-2.step3', descKey: 'quest.1-2.step3.desc', completed: false },
+      { id: 4, titleKey: 'quest.1-2.step4', descKey: 'quest.1-2.step4.desc', completed: false },
     ],
-    tips: [
-      '注意聆聽自己的音色',
-      '使用調音器確認音準',
-      '嘗試不同的氣息強度',
-    ],
+    tipKeys: ['quest.1-2.tip1', 'quest.1-2.tip2', 'quest.1-2.tip3'],
   },
   '1-3': {
-    title: '節奏感培養',
-    description: '使用節拍器進行節奏訓練，建立穩定的內在節奏感。從簡單的四拍開始。',
+    titleKey: 'quest.1-3.title',
+    descKey: 'quest.1-3.description',
     videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    duration: '25分鐘',
-    difficulty: '中等',
+    duration: 25,
+    difficulty: 'medium',
     steps: [
-      { id: 1, title: '觀看教學影片', description: '完整觀看節奏訓練教學影片', completed: false },
-      { id: 2, title: '節拍器練習', description: '跟著節拍器練習基本節奏', completed: false },
-      { id: 3, title: '變速練習', description: '嘗試不同速度的節奏', completed: false },
-      { id: 4, title: '上傳練習影片', description: '錄製並上傳你的練習成果', completed: false },
+      { id: 1, titleKey: 'quest.1-3.step1', descKey: 'quest.1-3.step1.desc', completed: false },
+      { id: 2, titleKey: 'quest.1-3.step2', descKey: 'quest.1-3.step2.desc', completed: false },
+      { id: 3, titleKey: 'quest.1-3.step3', descKey: 'quest.1-3.step3.desc', completed: false },
+      { id: 4, titleKey: 'quest.1-3.step4', descKey: 'quest.1-3.step4.desc', completed: false },
     ],
-    tips: [
-      '從慢速開始，逐漸加快',
-      '用腳打拍子幫助保持節奏',
-      '專注於穩定性而非速度',
-    ],
+    tipKeys: ['quest.1-3.tip1', 'quest.1-3.tip2', 'quest.1-3.tip3'],
+    showMetronome: true,
   },
 };
 
 export default function QuestDetail() {
   const { id } = useParams<{ id: string }>();
-  const { t } = useLanguage();
-  const [steps, setSteps] = useState<QuestStep[]>(questData[id || '1-1']?.steps || []);
-  
-  const quest = questData[id || '1-1'];
+  const { t, language } = useLanguage();
+  const questId = id || '1-1';
+  const quest = questData[questId];
+  const [steps, setSteps] = useState<QuestStep[]>(quest?.steps || []);
+  const [activeTab, setActiveTab] = useState<string>('video');
   
   if (!quest) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="font-display text-2xl text-foreground mb-4">任務不存在</h1>
+          <h1 className="font-display text-2xl text-foreground mb-4">{t('quest.notFound')}</h1>
           <Link href="/quests">
-            <Button>返回任務列表</Button>
+            <Button>{t('quest.backToList')}</Button>
           </Link>
         </div>
       </div>
@@ -115,11 +110,15 @@ export default function QuestDetail() {
     setSteps(prev => prev.map(step => 
       step.id === stepId ? { ...step, completed: !step.completed } : step
     ));
-    toast.success('進度已更新！');
+    toast.success(language === 'zh' ? '進度已更新！' : 'Progress updated!');
   };
 
   const handleUpload = () => {
-    toast.info('影片上傳功能即將推出！');
+    toast.info(language === 'zh' ? '影片上傳功能即將推出！' : 'Video upload coming soon!');
+  };
+
+  const getDifficultyText = (diff: string) => {
+    return t(`difficulty.${diff}`);
   };
 
   return (
@@ -127,7 +126,7 @@ export default function QuestDetail() {
       <Navigation />
       
       <main className="lg:ml-20 pt-20 lg:pt-8 pb-20">
-        <div className="container max-w-5xl">
+        <div className="container max-w-6xl">
           {/* Back Button */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -157,25 +156,25 @@ export default function QuestDetail() {
               {/* Quest Info */}
               <div className="flex-1">
                 <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
-                  {quest.title}
+                  {t(quest.titleKey)}
                 </h1>
                 <p className="text-muted-foreground mb-4">
-                  {quest.description}
+                  {t(quest.descKey)}
                 </p>
 
                 {/* Meta */}
                 <div className="flex flex-wrap gap-4 text-sm">
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="w-4 h-4" />
-                    {quest.duration}
+                    {quest.duration}{t('misc.minutes')}
                   </span>
                   <span className="flex items-center gap-1 text-accent">
                     <Music className="w-4 h-4" />
-                    {quest.difficulty}
+                    {getDifficultyText(quest.difficulty)}
                   </span>
                   <span className="flex items-center gap-1 text-primary">
                     <Award className="w-4 h-4" />
-                    完成可獲得經驗值
+                    {t('quest.earnExp')}
                   </span>
                 </div>
               </div>
@@ -209,7 +208,7 @@ export default function QuestDetail() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {completedSteps}/{steps.length} 步驟
+                  {completedSteps}/{steps.length} {t('misc.step')}
                 </p>
               </div>
             </div>
@@ -218,31 +217,59 @@ export default function QuestDetail() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-8">
-              {/* Video Player */}
+              {/* Content Tabs */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="magic-card overflow-hidden"
               >
-                <div className="aspect-video bg-black relative">
-                  <iframe
-                    src={quest.videoUrl}
-                    title={quest.title}
-                    className="absolute inset-0 w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-                <div className="p-4 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Play className="w-4 h-4" />
-                    教學影片
-                  </span>
-                  <Button variant="outline" size="sm">
-                    全螢幕觀看
-                  </Button>
-                </div>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="w-full grid grid-cols-3 mb-4">
+                    <TabsTrigger value="video" className="flex items-center gap-2">
+                      <Play className="w-4 h-4" />
+                      {t('quest.video')}
+                    </TabsTrigger>
+                    <TabsTrigger value="metronome" className="flex items-center gap-2">
+                      <Music className="w-4 h-4" />
+                      {t('tools.metronome')}
+                    </TabsTrigger>
+                    <TabsTrigger value="recorder" className="flex items-center gap-2">
+                      <Wrench className="w-4 h-4" />
+                      {t('tools.recorder')}
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="video" className="mt-0">
+                    <div className="magic-card overflow-hidden">
+                      <div className="aspect-video bg-black relative">
+                        <iframe
+                          src={quest.videoUrl}
+                          title={t(quest.titleKey)}
+                          className="absolute inset-0 w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                      <div className="p-4 flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground flex items-center gap-2">
+                          <Play className="w-4 h-4" />
+                          {t('quest.video')}
+                        </span>
+                        <Button variant="outline" size="sm">
+                          {t('quest.fullscreen')}
+                        </Button>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="metronome" className="mt-0">
+                    <Metronome defaultBpm={80} />
+                  </TabsContent>
+
+                  <TabsContent value="recorder" className="mt-0">
+                    <AudioRecorder />
+                  </TabsContent>
+                </Tabs>
               </motion.div>
 
               {/* Steps */}
@@ -254,7 +281,7 @@ export default function QuestDetail() {
               >
                 <h2 className="font-display text-xl font-bold text-foreground mb-4 flex items-center gap-2">
                   <Target className="w-5 h-5 text-primary" />
-                  任務步驟
+                  {t('quest.steps')}
                 </h2>
                 
                 <div className="space-y-4">
@@ -288,10 +315,10 @@ export default function QuestDetail() {
                       </div>
                       <div>
                         <h3 className={`font-semibold ${step.completed ? 'text-green-400' : 'text-foreground'}`}>
-                          {step.title}
+                          {t(step.titleKey)}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          {step.description}
+                          {t(step.descKey)}
                         </p>
                       </div>
                     </motion.div>
@@ -301,7 +328,7 @@ export default function QuestDetail() {
                 {/* Progress Bar */}
                 <div className="mt-6">
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">總進度</span>
+                    <span className="text-muted-foreground">{t('quest.totalProgress')}</span>
                     <span className="text-primary font-semibold">{Math.round(progress)}%</span>
                   </div>
                   <Progress value={progress} className="h-2" />
@@ -320,13 +347,13 @@ export default function QuestDetail() {
               >
                 <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <MessageCircle className="w-5 h-5 text-accent" />
-                  練習小提示
+                  {t('quest.tips')}
                 </h2>
                 <ul className="space-y-3">
-                  {quest.tips.map((tip, index) => (
+                  {quest.tipKeys.map((tipKey, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
                       <span className="text-primary mt-1">•</span>
-                      {tip}
+                      {t(tipKey)}
                     </li>
                   ))}
                 </ul>
@@ -341,14 +368,14 @@ export default function QuestDetail() {
               >
                 <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <Upload className="w-5 h-5 text-primary" />
-                  上傳練習成果
+                  {t('quest.uploadSection')}
                 </h2>
                 <p className="text-sm text-muted-foreground mb-4">
-                  錄製你的練習影片並上傳，導師會給予回饋和評分。
+                  {t('quest.uploadDescription')}
                 </p>
                 <Button onClick={handleUpload} className="w-full bg-primary hover:bg-primary/90">
                   <Upload className="w-4 h-4 mr-2" />
-                  上傳影片
+                  {t('action.upload')}
                 </Button>
               </motion.div>
 
@@ -361,13 +388,13 @@ export default function QuestDetail() {
                 >
                   <Award className="w-12 h-12 text-primary mx-auto mb-4" />
                   <h3 className="font-display text-lg font-bold text-foreground mb-2">
-                    恭喜完成任務！
+                    {t('quest.congratulations')}
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    你已完成所有步驟，可以提交任務了。
+                    {t('quest.allStepsComplete')}
                   </p>
                   <Button className="w-full bg-gradient-to-r from-primary to-accent">
-                    提交任務
+                    {t('quest.submit')}
                   </Button>
                 </motion.div>
               )}

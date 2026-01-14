@@ -6,7 +6,7 @@
 
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
-import { Sparkles, ChevronRight, Music, Target, RefreshCw } from 'lucide-react';
+import { Sparkles, ChevronRight, Music, Target, RefreshCw, MapIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Navigation from '@/components/Navigation';
@@ -238,8 +238,8 @@ export default function Home() {
                     size="lg"
                     className="font-display bg-primary hover:bg-primary/90 glow-gold"
                   >
-                    <Map className="w-5 h-5 mr-2" />
-                    探索村莊地圖
+                    <MapIcon className="w-5 h-5 mr-2" />
+                    {t('home.exploreMap')}
                   </Button>
                 </Link>
               </div>
@@ -261,32 +261,11 @@ export default function Home() {
               </span>
             </div>
             <p className="text-muted-foreground text-sm">
-              © 2024 Beatbox Flute RPG. All rights reserved.
+              {t('footer.copyright')}
             </p>
           </div>
         </footer>
       </main>
     </div>
-  );
-}
-
-function Map(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-      <line x1="9" x2="9" y1="3" y2="18" />
-      <line x1="15" x2="15" y1="6" y2="21" />
-    </svg>
   );
 }

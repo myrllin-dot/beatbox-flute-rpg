@@ -101,7 +101,7 @@ export default function Village() {
               {t('nav.village')}
             </h1>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              選擇你要前往的村莊，完成任務以解鎖下一個區域
+              {t('village.description')}
             </p>
           </motion.div>
 
@@ -185,7 +185,7 @@ function VillageCard({ village, t, getStatusIcon, getStatusText }: VillageCardPr
       {!isLocked && (
         <div className="mb-4">
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-muted-foreground">任務進度</span>
+            <span className="text-muted-foreground">{t('village.progress')}</span>
             <span className="text-primary font-semibold">
               {village.completedQuests}/{village.questCount}
             </span>

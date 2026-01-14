@@ -11,37 +11,37 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import Navigation from '@/components/Navigation';
 import { toast } from 'sonner';
 
-const playerData = {
-  name: '冒險者',
-  email: 'myrllincheng@gmail.com',
-  avatar: '/images/wizard-character.png',
-  level: 1,
-  title: '長笛見習生',
-  joinDate: '2024-01-10',
-  location: '新手村',
-  totalExp: 250,
-  badges: 2,
-  completedQuests: 2,
-  practiceHours: 5.5,
-};
-
-const recentActivity = [
-  { id: 1, type: 'quest', text: '完成任務：基礎氣息控制', date: '2024-01-18' },
-  { id: 2, type: 'badge', text: '獲得徽章：氣息大師', date: '2024-01-18' },
-  { id: 3, type: 'quest', text: '完成任務：音色穩定訓練', date: '2024-01-15' },
-  { id: 4, type: 'badge', text: '獲得徽章：踏出第一步', date: '2024-01-15' },
-  { id: 5, type: 'join', text: '加入絕技長笛 RPG', date: '2024-01-10' },
-];
-
 export default function Profile() {
   const { t, language, toggleLanguage } = useLanguage();
 
+  const playerData = {
+    name: language === 'zh' ? '冒險者' : 'Adventurer',
+    email: 'myrllincheng@gmail.com',
+    avatar: '/images/wizard-character.png',
+    level: 1,
+    title: t('level.apprentice'),
+    joinDate: '2024-01-10',
+    location: t('village.beginner'),
+    totalExp: 250,
+    badges: 2,
+    completedQuests: 2,
+    practiceHours: 5.5,
+  };
+
+  const recentActivity = [
+    { id: 1, type: 'quest', textKey: 'activity.quest1', date: '2024-01-18' },
+    { id: 2, type: 'badge', textKey: 'activity.badge1', date: '2024-01-18' },
+    { id: 3, type: 'quest', textKey: 'activity.quest2', date: '2024-01-15' },
+    { id: 4, type: 'badge', textKey: 'activity.badge2', date: '2024-01-15' },
+    { id: 5, type: 'join', textKey: 'activity.join', date: '2024-01-10' },
+  ];
+
   const handleEditProfile = () => {
-    toast.info('個人資料編輯功能即將推出！');
+    toast.info(t('toast.editProfile'));
   };
 
   const handleLogout = () => {
-    toast.info('登出功能即將推出！');
+    toast.info(t('toast.logout'));
   };
 
   return (
@@ -109,7 +109,7 @@ export default function Profile() {
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
-                    加入於 {playerData.joinDate}
+                    {t('profile.joinedOn')} {playerData.joinDate}
                   </span>
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
@@ -126,7 +126,7 @@ export default function Profile() {
                   className="w-full"
                 >
                   <Settings className="w-4 h-4 mr-2" />
-                  設定
+                  {t('profile.settings')}
                 </Button>
                 <Button 
                   variant="outline" 
@@ -134,7 +134,7 @@ export default function Profile() {
                   className="w-full text-destructive hover:text-destructive"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
-                  登出
+                  {t('profile.logout')}
                 </Button>
               </div>
             </div>
@@ -147,10 +147,10 @@ export default function Profile() {
             transition={{ delay: 0.2 }}
             className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
           >
-            <StatCard label="總經驗值" value={playerData.totalExp.toString()} />
-            <StatCard label="獲得徽章" value={playerData.badges.toString()} />
-            <StatCard label="完成任務" value={playerData.completedQuests.toString()} />
-            <StatCard label="練習時數" value={`${playerData.practiceHours}h`} />
+            <StatCard label={t('profile.totalExp')} value={playerData.totalExp.toString()} />
+            <StatCard label={t('progress.badges')} value={playerData.badges.toString()} />
+            <StatCard label={t('progress.quests')} value={playerData.completedQuests.toString()} />
+            <StatCard label={t('progress.practiceHours')} value={`${playerData.practiceHours}h`} />
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -163,7 +163,7 @@ export default function Profile() {
             >
               <h3 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <User className="w-5 h-5 text-primary" />
-                最近活動
+                {t('profile.recentActivity')}
               </h3>
               
               <div className="space-y-4">
@@ -186,7 +186,7 @@ export default function Profile() {
                        <User className="w-4 h-4" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground">{activity.text}</p>
+                      <p className="text-sm text-foreground">{t(activity.textKey)}</p>
                       <p className="text-xs text-muted-foreground">{activity.date}</p>
                     </div>
                   </motion.div>
@@ -203,7 +203,7 @@ export default function Profile() {
             >
               <h3 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <Settings className="w-5 h-5 text-accent" />
-                快速設定
+                {t('profile.quickSettings')}
               </h3>
               
               <div className="space-y-4">
@@ -229,19 +229,19 @@ export default function Profile() {
 
                 {/* Other Settings */}
                 <SettingItem 
-                  label="通知設定" 
-                  description="管理推播通知"
-                  onClick={() => toast.info('通知設定即將推出！')}
+                  label={t('settings.notifications')} 
+                  description={t('settings.notificationsDesc')}
+                  onClick={() => toast.info(t('toast.comingSoon'))}
                 />
                 <SettingItem 
-                  label="隱私設定" 
-                  description="管理個人資料可見度"
-                  onClick={() => toast.info('隱私設定即將推出！')}
+                  label={t('settings.privacy')} 
+                  description={t('settings.privacyDesc')}
+                  onClick={() => toast.info(t('toast.comingSoon'))}
                 />
                 <SettingItem 
-                  label="帳號設定" 
-                  description="修改密碼和帳號資訊"
-                  onClick={() => toast.info('帳號設定即將推出！')}
+                  label={t('settings.account')} 
+                  description={t('settings.accountDesc')}
+                  onClick={() => toast.info(t('toast.comingSoon'))}
                 />
               </div>
             </motion.div>
@@ -256,7 +256,7 @@ export default function Profile() {
           >
             <h3 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
               <Award className="w-5 h-5 text-primary" />
-              我的徽章
+              {t('profile.myBadges')}
             </h3>
             
             <div className="flex flex-wrap gap-4">

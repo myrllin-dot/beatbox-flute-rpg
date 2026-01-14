@@ -12,8 +12,8 @@ import { Progress as ProgressBar } from '@/components/ui/progress';
 
 interface Badge {
   id: string;
-  name: string;
-  description: string;
+  nameKey: string;
+  descKey: string;
   icon: string;
   earned: boolean;
   earnedDate?: string;
@@ -21,7 +21,7 @@ interface Badge {
 
 interface Skill {
   id: string;
-  name: string;
+  nameKey: string;
   level: number;
   maxLevel: number;
   unlocked: boolean;
@@ -30,59 +30,59 @@ interface Skill {
 const badges: Badge[] = [
   {
     id: 'black-flute',
-    name: '黑笛徽章',
-    description: '完成新手村所有任務',
+    nameKey: 'badge.black',
+    descKey: 'quest.beginner.reward',
     icon: '/images/badge-black-flute.png',
     earned: false,
   },
   {
     id: 'first-step',
-    name: '踏出第一步',
-    description: '完成第一個任務',
+    nameKey: 'badge.firstStep',
+    descKey: 'badge.firstStep',
     icon: '/images/badge-black-flute.png',
     earned: true,
     earnedDate: '2024-01-15',
   },
   {
     id: 'breath-master',
-    name: '氣息大師',
-    description: '完成氣息控制訓練',
+    nameKey: 'badge.breathMaster',
+    descKey: 'badge.breathMaster',
     icon: '/images/badge-black-flute.png',
     earned: true,
     earnedDate: '2024-01-18',
   },
   {
     id: 'silver-flute',
-    name: '銀笛徽章',
-    description: '完成試煉村所有任務',
+    nameKey: 'badge.silver',
+    descKey: 'quest.trial.reward',
     icon: '/images/badge-black-flute.png',
     earned: false,
   },
   {
     id: 'gold-flute',
-    name: '金笛徽章',
-    description: '完成開拓村所有任務',
+    nameKey: 'badge.gold',
+    descKey: 'quest.explorer.title',
     icon: '/images/badge-black-flute.png',
     earned: false,
   },
   {
     id: 'master',
-    name: '大師徽章',
-    description: '達到領域展開',
+    nameKey: 'badge.master',
+    descKey: 'quest.master.title',
     icon: '/images/badge-black-flute.png',
     earned: false,
   },
 ];
 
 const skills: Skill[] = [
-  { id: 'breath', name: '氣息控制', level: 3, maxLevel: 5, unlocked: true },
-  { id: 'tone', name: '音色穩定', level: 2, maxLevel: 5, unlocked: true },
-  { id: 'rhythm', name: '節奏感', level: 1, maxLevel: 5, unlocked: true },
-  { id: 'beatbox', name: 'Beatbox 基礎', level: 0, maxLevel: 5, unlocked: true },
-  { id: 'dual-voice', name: '雙重聲', level: 0, maxLevel: 5, unlocked: false },
-  { id: 'blues', name: '藍調旋律', level: 0, maxLevel: 5, unlocked: false },
-  { id: 'improv', name: '即興演奏', level: 0, maxLevel: 5, unlocked: false },
-  { id: 'performance', name: '表演技巧', level: 0, maxLevel: 5, unlocked: false },
+  { id: 'breath', nameKey: 'skill.breathControl', level: 3, maxLevel: 5, unlocked: true },
+  { id: 'tone', nameKey: 'skill.toneStability', level: 2, maxLevel: 5, unlocked: true },
+  { id: 'rhythm', nameKey: 'skill.rhythm', level: 1, maxLevel: 5, unlocked: true },
+  { id: 'beatbox', nameKey: 'skill.beatboxBasic', level: 0, maxLevel: 5, unlocked: true },
+  { id: 'dual-voice', nameKey: 'skill.dualVoice', level: 0, maxLevel: 5, unlocked: false },
+  { id: 'blues', nameKey: 'skill.bluesMelody', level: 0, maxLevel: 5, unlocked: false },
+  { id: 'improv', nameKey: 'skill.improvisation', level: 0, maxLevel: 5, unlocked: false },
+  { id: 'performance', nameKey: 'skill.performance', level: 0, maxLevel: 5, unlocked: false },
 ];
 
 const stats = {
@@ -99,9 +99,14 @@ const stats = {
 };
 
 export default function Progress() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const expProgress = (stats.currentExp / stats.nextLevelExp) * 100;
+  const expNeeded = stats.nextLevelExp - stats.currentExp;
+
+  const weekDays = language === 'zh' 
+    ? ['一', '二', '三', '四', '五', '六', '日']
+    : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return (
     <div className="min-h-screen bg-background">
@@ -119,7 +124,7 @@ export default function Progress() {
               {t('progress.title')}
             </h1>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              追蹤你的學習進度，收集徽章，提升技能等級
+              {t('progress.description')}
             </p>
           </motion.div>
 
@@ -145,15 +150,15 @@ export default function Progress() {
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="font-display text-xl font-bold text-foreground">
-                    {t('level.1')} 長笛見習生
+                    {t('level.1')} {t('level.apprentice')}
                   </h2>
                   <span className="text-sm text-muted-foreground">
-                    {stats.currentExp} / {stats.nextLevelExp} EXP
+                    {stats.currentExp} / {stats.nextLevelExp} {t('misc.exp')}
                   </span>
                 </div>
                 <ProgressBar value={expProgress} className="h-3 mb-2" />
                 <p className="text-sm text-muted-foreground">
-                  再獲得 {stats.nextLevelExp - stats.currentExp} 經驗值即可升級
+                  {t('progress.expNeeded').replace('{exp}', expNeeded.toString())}
                 </p>
               </div>
             </div>
@@ -168,26 +173,26 @@ export default function Progress() {
           >
             <StatCard
               icon={<Target className="w-6 h-6" />}
-              label="完成任務"
+              label={t('progress.quests')}
               value={`${stats.completedQuests}/${stats.totalQuests}`}
               color="text-primary"
             />
             <StatCard
               icon={<Trophy className="w-6 h-6" />}
-              label="獲得徽章"
+              label={t('progress.badges')}
               value={`${stats.earnedBadges}/${stats.totalBadges}`}
               color="text-yellow-400"
             />
             <StatCard
               icon={<Clock className="w-6 h-6" />}
-              label="練習時數"
+              label={t('progress.practiceHours')}
               value={`${stats.practiceHours}h`}
               color="text-accent"
             />
             <StatCard
               icon={<Flame className="w-6 h-6" />}
-              label="連續練習"
-              value={`${stats.currentStreak} 天`}
+              label={t('progress.streak')}
+              value={`${stats.currentStreak} ${t('progress.days')}`}
               color="text-orange-400"
             />
           </motion.div>
@@ -202,7 +207,7 @@ export default function Progress() {
             >
               <h2 className="font-display text-xl font-bold text-foreground mb-6 flex items-center gap-2">
                 <Award className="w-5 h-5 text-primary" />
-                徽章收藏
+                {t('badge.collection')}
               </h2>
               
               <div className="grid grid-cols-3 gap-4">
@@ -223,7 +228,7 @@ export default function Progress() {
                     <div className="relative mx-auto w-16 h-16 mb-2">
                       <img 
                         src={badge.icon}
-                        alt={badge.name}
+                        alt={t(badge.nameKey)}
                         className={`w-full h-full object-contain ${!badge.earned && 'grayscale'}`}
                       />
                       {!badge.earned && (
@@ -233,7 +238,7 @@ export default function Progress() {
                       )}
                     </div>
                     <h3 className={`text-sm font-semibold ${badge.earned ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      {badge.name}
+                      {t(badge.nameKey)}
                     </h3>
                     {badge.earned && badge.earnedDate && (
                       <p className="text-xs text-muted-foreground mt-1">
@@ -254,7 +259,7 @@ export default function Progress() {
             >
               <h2 className="font-display text-xl font-bold text-foreground mb-6 flex items-center gap-2">
                 <Star className="w-5 h-5 text-accent" />
-                技能樹
+                {t('progress.skillTree')}
               </h2>
               
               <div className="space-y-4">
@@ -284,7 +289,7 @@ export default function Progress() {
                           <Lock className="w-4 h-4 text-muted-foreground" />
                         )}
                         <span className={`font-medium ${skill.unlocked ? 'text-foreground' : 'text-muted-foreground'}`}>
-                          {skill.name}
+                          {t(skill.nameKey)}
                         </span>
                       </div>
                       <span className="text-sm text-muted-foreground">
@@ -320,17 +325,17 @@ export default function Progress() {
           >
             <Flame className="w-12 h-12 text-orange-400 mx-auto mb-4" />
             <h2 className="font-display text-xl font-bold text-foreground mb-2">
-              連續練習 {stats.currentStreak} 天！
+              {t('progress.streakTitle').replace('{days}', stats.currentStreak.toString())}
             </h2>
             <p className="text-muted-foreground mb-4">
-              你的最長連續練習紀錄是 {stats.longestStreak} 天，繼續保持！
+              {t('progress.streakRecord').replace('{days}', stats.longestStreak.toString())}
             </p>
             
             {/* Week Calendar */}
             <div className="flex justify-center gap-2">
-              {['一', '二', '三', '四', '五', '六', '日'].map((day, index) => (
+              {weekDays.map((day, index) => (
                 <div
-                  key={day}
+                  key={day + index}
                   className={`
                     w-10 h-10 rounded-lg flex items-center justify-center text-sm font-medium
                     ${index < stats.currentStreak 
