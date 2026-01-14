@@ -11,8 +11,8 @@ import Quests from "./pages/Quests";
 import QuestDetail from "./pages/QuestDetail";
 import Progress from "./pages/Progress";
 import Profile from "./pages/Profile";
-
 function Router() {
+  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path="/" component={Home} />

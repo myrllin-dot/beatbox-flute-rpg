@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Metronome from '@/components/Metronome';
 import AudioRecorder from '@/components/AudioRecorder';
+import CommentSection from '@/components/CommentSection';
 
 interface QuestStep {
   id: number;
@@ -377,6 +378,16 @@ export default function QuestDetail() {
                   <Upload className="w-4 h-4 mr-2" />
                   {t('action.upload')}
                 </Button>
+              </motion.div>
+
+              {/* Comment Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="lg:col-span-2"
+              >
+                <CommentSection questId={questId} />
               </motion.div>
 
               {/* Complete Button */}
