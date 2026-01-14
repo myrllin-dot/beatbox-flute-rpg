@@ -17,6 +17,7 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.quests': '任務說明',
     'nav.progress': '進度追蹤',
     'nav.profile': '個人資料',
+    'nav.leaderboard': '排行榜',
     
     // Home page
     'home.title': '絕技長笛 RPG',
@@ -296,6 +297,7 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.quests': 'Quests',
     'nav.progress': 'Progress',
     'nav.profile': 'Profile',
+    'nav.leaderboard': 'Leaderboard',
     
     // Home page
     'home.title': 'Beatbox Flute RPG',

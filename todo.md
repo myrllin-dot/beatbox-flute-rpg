@@ -11,3 +11,10 @@
 - [x] Build video upload frontend component
 - [x] Build instructor review dashboard
 - [x] Test new features
+
+- [x] Create achievements and progress database schema
+- [x] Create achievements notification API endpoints
+- [x] Build leaderboard page with ranking display
+- [x] Build achievement celebration animation component
+- [x] Integrate notifications into quest completion flow
+- [x] Test new features

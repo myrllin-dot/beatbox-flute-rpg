@@ -15,6 +15,23 @@ import {
   getAllSubmissions,
   reviewSubmission,
   deleteSubmission,
+  // Progress & Leaderboard
+  getUserProgress,
+  updateUserProgress,
+  getAllUserProgress,
+  getLeaderboard,
+  getUserRank,
+  // Achievements
+  getAllAchievements,
+  getUserAchievements,
+  awardAchievement,
+  createAchievement,
+  // Notifications
+  createNotification,
+  getUserNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  getUnreadNotificationCount,
 } from "./db";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -162,6 +179,163 @@ export const appRouter = router({
           score: input.score,
           feedback: input.feedback,
         });
+      }),
+  }),
+
+  // User Progress API
+  progress: router({
+    // Get user's progress for a specific quest
+    get: protectedProcedure
+      .input(z.object({ questId: z.string() }))
+      .query(async ({ input, ctx }) => {
+        return await getUserProgress(ctx.user.id, input.questId);
+      }),
+
+    // Get all progress for current user
+    myProgress: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getAllUserProgress(ctx.user.id);
+      }),
+
+    // Update progress for a quest
+    update: protectedProcedure
+      .input(z.object({
+        questId: z.string(),
+        progress: z.number().min(0).max(100),
+        completed: z.boolean().optional(),
+        xpEarned: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await updateUserProgress({
+          userId: ctx.user.id,
+          questId: input.questId,
+          progress: input.progress,
+          completed: input.completed,
+          xpEarned: input.xpEarned,
+        });
+
+        // If quest is completed, create notification and check for achievements
+        if (input.completed) {
+          await createNotification({
+            userId: ctx.user.id,
+            type: 'quest_complete',
+            titleZh: '任務完成！',
+            titleEn: 'Quest Completed!',
+            messageZh: `恭喜你完成了任務 ${input.questId}，獲得 ${input.xpEarned || 0} XP！`,
+            messageEn: `Congratulations! You completed quest ${input.questId} and earned ${input.xpEarned || 0} XP!`,
+            relatedId: input.questId,
+          });
+
+          // Check for first quest achievement
+          const allProgress = await getAllUserProgress(ctx.user.id);
+          const completedCount = allProgress.filter(p => p.completed === 1).length;
+          
+          if (completedCount === 1) {
+            try {
+              const achResult = await awardAchievement(ctx.user.id, 'first_quest');
+              if (!achResult.alreadyEarned) {
+                await createNotification({
+                  userId: ctx.user.id,
+                  type: 'achievement',
+                  titleZh: '獲得成就！',
+                  titleEn: 'Achievement Unlocked!',
+                  messageZh: `你獲得了「${achResult.achievement.nameZh}」成就！`,
+                  messageEn: `You earned the "${achResult.achievement.nameEn}" achievement!`,
+                  relatedId: achResult.achievement.code,
+                });
+              }
+            } catch (e) {
+              // Achievement might not exist yet, ignore
+            }
+          }
+        }
+
+        return result;
+      }),
+
+    // Get user's rank
+    myRank: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getUserRank(ctx.user.id);
+      }),
+  }),
+
+  // Leaderboard API
+  leaderboard: router({
+    // Get top users
+    top: publicProcedure
+      .input(z.object({ limit: z.number().min(1).max(100).optional() }))
+      .query(async ({ input }) => {
+        return await getLeaderboard(input.limit || 20);
+      }),
+  }),
+
+  // Achievements API
+  achievements: router({
+    // Get all available achievements
+    list: publicProcedure
+      .query(async () => {
+        return await getAllAchievements();
+      }),
+
+    // Get user's earned achievements
+    myAchievements: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getUserAchievements(ctx.user.id);
+      }),
+
+    // Admin: Create a new achievement
+    create: adminProcedure
+      .input(z.object({
+        code: z.string().min(1).max(64),
+        nameZh: z.string().min(1).max(128),
+        nameEn: z.string().min(1).max(128),
+        descriptionZh: z.string().optional(),
+        descriptionEn: z.string().optional(),
+        iconUrl: z.string().optional(),
+        xpReward: z.number().min(0).optional(),
+        category: z.enum(['quest', 'skill', 'social', 'special']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createAchievement({
+          code: input.code,
+          nameZh: input.nameZh,
+          nameEn: input.nameEn,
+          descriptionZh: input.descriptionZh ?? null,
+          descriptionEn: input.descriptionEn ?? null,
+          iconUrl: input.iconUrl ?? null,
+          xpReward: input.xpReward ?? 0,
+          category: input.category ?? 'quest',
+        });
+      }),
+  }),
+
+  // Notifications API
+  notifications: router({
+    // Get user's notifications
+    list: protectedProcedure
+      .input(z.object({ unreadOnly: z.boolean().optional() }))
+      .query(async ({ input, ctx }) => {
+        return await getUserNotifications(ctx.user.id, input.unreadOnly);
+      }),
+
+    // Get unread count
+    unreadCount: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getUnreadNotificationCount(ctx.user.id);
+      }),
+
+    // Mark notification as read
+    markRead: protectedProcedure
+      .input(z.object({ notificationId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await markNotificationRead(input.notificationId, ctx.user.id);
+      }),
+
+    // Mark all as read
+    markAllRead: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        return await markAllNotificationsRead(ctx.user.id);
       }),
   }),
 });

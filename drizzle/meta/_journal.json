@@ -22,6 +22,13 @@
       "when": 1768421872987,
       "tag": "0002_slimy_satana",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1768422764021,
+      "tag": "0003_wooden_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

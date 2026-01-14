@@ -1,6 +1,13 @@
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, comments, commentLikes, InsertComment, videoSubmissions, InsertVideoSubmission } from "../drizzle/schema";
+import { 
+  InsertUser, users, comments, commentLikes, InsertComment, 
+  videoSubmissions, InsertVideoSubmission,
+  userProgress, InsertUserProgress,
+  achievements, InsertAchievement,
+  userAchievements, InsertUserAchievement,
+  notifications, InsertNotification
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -448,4 +455,357 @@ export async function deleteSubmission(submissionId: number, userId: number, isA
   await db.delete(videoSubmissions).where(eq(videoSubmissions.id, submissionId));
 
   return { success: true };
+}
+
+
+// ============ User Progress Functions ============
+
+/**
+ * Get or create user progress for a quest
+ */
+export async function getUserProgress(userId: number, questId: string) {
+  const db = await getDb();
+  if (!db) {
+    return null;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(userProgress)
+    .where(and(
+      eq(userProgress.userId, userId),
+      eq(userProgress.questId, questId)
+    ))
+    .limit(1);
+
+  return existing || null;
+}
+
+/**
+ * Update user progress for a quest
+ */
+export async function updateUserProgress(data: {
+  userId: number;
+  questId: string;
+  progress: number;
+  completed?: boolean;
+  xpEarned?: number;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const existing = await getUserProgress(data.userId, data.questId);
+
+  if (existing) {
+    await db.update(userProgress)
+      .set({
+        progress: data.progress,
+        completed: data.completed ? 1 : existing.completed,
+        xpEarned: data.xpEarned ?? existing.xpEarned,
+        completedAt: data.completed ? new Date() : existing.completedAt,
+      })
+      .where(eq(userProgress.id, existing.id));
+    return { id: existing.id, isNew: false };
+  } else {
+    const result = await db.insert(userProgress).values({
+      userId: data.userId,
+      questId: data.questId,
+      progress: data.progress,
+      completed: data.completed ? 1 : 0,
+      xpEarned: data.xpEarned ?? 0,
+      completedAt: data.completed ? new Date() : null,
+    });
+    return { id: Number(result[0].insertId), isNew: true };
+  }
+}
+
+/**
+ * Get all progress for a user
+ */
+export async function getAllUserProgress(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db
+    .select()
+    .from(userProgress)
+    .where(eq(userProgress.userId, userId))
+    .orderBy(desc(userProgress.updatedAt));
+}
+
+/**
+ * Get leaderboard data (top users by XP)
+ */
+export async function getLeaderboard(limit: number = 20) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  // Get total XP per user
+  const result = await db
+    .select({
+      userId: userProgress.userId,
+      userName: users.name,
+      totalXp: sql<number>`SUM(${userProgress.xpEarned})`.as('totalXp'),
+      completedQuests: sql<number>`SUM(${userProgress.completed})`.as('completedQuests'),
+    })
+    .from(userProgress)
+    .leftJoin(users, eq(userProgress.userId, users.id))
+    .groupBy(userProgress.userId, users.name)
+    .orderBy(desc(sql`SUM(${userProgress.xpEarned})`))
+    .limit(limit);
+
+  return result;
+}
+
+/**
+ * Get user rank in leaderboard
+ */
+export async function getUserRank(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    return null;
+  }
+
+  // Get all users ordered by XP
+  const allUsers = await db
+    .select({
+      odUserId: userProgress.userId,
+      totalXp: sql<number>`SUM(${userProgress.xpEarned})`.as('totalXp'),
+    })
+    .from(userProgress)
+    .groupBy(userProgress.userId)
+    .orderBy(desc(sql`SUM(${userProgress.xpEarned})`));
+
+  const rank = allUsers.findIndex(u => u.odUserId === userId) + 1;
+  const userStats = allUsers.find(u => u.odUserId === userId);
+
+  return {
+    rank: rank > 0 ? rank : null,
+    totalXp: userStats?.totalXp ?? 0,
+    totalUsers: allUsers.length,
+  };
+}
+
+// ============ Achievement Functions ============
+
+/**
+ * Get all achievements
+ */
+export async function getAllAchievements() {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db.select().from(achievements);
+}
+
+/**
+ * Get user's earned achievements
+ */
+export async function getUserAchievements(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db
+    .select({
+      id: userAchievements.id,
+      achievementId: userAchievements.achievementId,
+      earnedAt: userAchievements.earnedAt,
+      code: achievements.code,
+      nameZh: achievements.nameZh,
+      nameEn: achievements.nameEn,
+      descriptionZh: achievements.descriptionZh,
+      descriptionEn: achievements.descriptionEn,
+      iconUrl: achievements.iconUrl,
+      xpReward: achievements.xpReward,
+      category: achievements.category,
+    })
+    .from(userAchievements)
+    .leftJoin(achievements, eq(userAchievements.achievementId, achievements.id))
+    .where(eq(userAchievements.userId, userId))
+    .orderBy(desc(userAchievements.earnedAt));
+}
+
+/**
+ * Award an achievement to a user
+ */
+export async function awardAchievement(userId: number, achievementCode: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Get the achievement
+  const [achievement] = await db
+    .select()
+    .from(achievements)
+    .where(eq(achievements.code, achievementCode))
+    .limit(1);
+
+  if (!achievement) {
+    throw new Error("Achievement not found");
+  }
+
+  // Check if already earned
+  const [existing] = await db
+    .select()
+    .from(userAchievements)
+    .where(and(
+      eq(userAchievements.userId, userId),
+      eq(userAchievements.achievementId, achievement.id)
+    ))
+    .limit(1);
+
+  if (existing) {
+    return { alreadyEarned: true, achievement };
+  }
+
+  // Award the achievement
+  await db.insert(userAchievements).values({
+    userId,
+    achievementId: achievement.id,
+  });
+
+  return { alreadyEarned: false, achievement };
+}
+
+/**
+ * Create a new achievement (admin only)
+ */
+export async function createAchievement(data: InsertAchievement) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.insert(achievements).values(data);
+  return { id: Number(result[0].insertId) };
+}
+
+// ============ Notification Functions ============
+
+/**
+ * Create a notification for a user
+ */
+export async function createNotification(data: {
+  userId: number;
+  type: "achievement" | "quest_complete" | "video_reviewed" | "level_up";
+  titleZh: string;
+  titleEn: string;
+  messageZh?: string;
+  messageEn?: string;
+  relatedId?: string;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.insert(notifications).values({
+    userId: data.userId,
+    type: data.type,
+    titleZh: data.titleZh,
+    titleEn: data.titleEn,
+    messageZh: data.messageZh ?? null,
+    messageEn: data.messageEn ?? null,
+    relatedId: data.relatedId ?? null,
+    isRead: 0,
+  });
+
+  return { id: Number(result[0].insertId) };
+}
+
+/**
+ * Get user's notifications
+ */
+export async function getUserNotifications(userId: number, unreadOnly: boolean = false) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  const query = db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt))
+    .limit(50);
+
+  if (unreadOnly) {
+    return await db
+      .select()
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, 0)
+      ))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50);
+  }
+
+  return await query;
+}
+
+/**
+ * Mark notification as read
+ */
+export async function markNotificationRead(notificationId: number, userId: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.update(notifications)
+    .set({ isRead: 1 })
+    .where(and(
+      eq(notifications.id, notificationId),
+      eq(notifications.userId, userId)
+    ));
+
+  return { success: true };
+}
+
+/**
+ * Mark all notifications as read for a user
+ */
+export async function markAllNotificationsRead(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.update(notifications)
+    .set({ isRead: 1 })
+    .where(eq(notifications.userId, userId));
+
+  return { success: true };
+}
+
+/**
+ * Get unread notification count
+ */
+export async function getUnreadNotificationCount(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    return 0;
+  }
+
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(notifications)
+    .where(and(
+      eq(notifications.userId, userId),
+      eq(notifications.isRead, 0)
+    ));
+
+  return result?.count ?? 0;
 }

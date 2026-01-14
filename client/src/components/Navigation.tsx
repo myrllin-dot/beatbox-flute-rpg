@@ -5,18 +5,20 @@
  */
 
 import { Link, useLocation } from 'wouter';
-import { Home, Map, Scroll, TrendingUp, User, Globe, Menu, X, GraduationCap } from 'lucide-react';
+import { Home, Map, Scroll, TrendingUp, User, Globe, Menu, X, GraduationCap, Trophy } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import NotificationBell from '@/components/NotificationBell';
 
 const navItems = [
   { path: '/', icon: Home, labelKey: 'nav.home' },
   { path: '/village', icon: Map, labelKey: 'nav.village' },
   { path: '/quests', icon: Scroll, labelKey: 'nav.quests' },
   { path: '/progress', icon: TrendingUp, labelKey: 'nav.progress' },
+  { path: '/leaderboard', icon: Trophy, labelKey: 'nav.leaderboard' },
   { path: '/profile', icon: User, labelKey: 'nav.profile' },
 ];
 
@@ -115,6 +117,9 @@ export default function Navigation() {
           )}
         </div>
 
+        {/* Notification Bell */}
+        <NotificationBell />
+
         {/* Language Toggle */}
         <Button
           variant="ghost"
@@ -143,6 +148,7 @@ export default function Navigation() {
           </Link>
 
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <Button
               variant="ghost"
               size="icon"

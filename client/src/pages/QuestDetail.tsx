@@ -18,6 +18,9 @@ import Metronome from '@/components/Metronome';
 import AudioRecorder from '@/components/AudioRecorder';
 import CommentSection from '@/components/CommentSection';
 import VideoSubmission from '@/components/VideoSubmission';
+import AchievementCelebration from '@/components/AchievementCelebration';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
 
 interface QuestStep {
   id: number;
@@ -87,10 +90,28 @@ const questData: Record<string, QuestData> = {
 export default function QuestDetail() {
   const { id } = useParams<{ id: string }>();
   const { t, language } = useLanguage();
+  const { isAuthenticated } = useAuth();
   const questId = id || '1-1';
   const quest = questData[questId];
   const [steps, setSteps] = useState<QuestStep[]>(quest?.steps || []);
   const [activeTab, setActiveTab] = useState<string>('video');
+  const [celebration, setCelebration] = useState<{
+    type: 'achievement' | 'quest_complete' | 'level_up';
+    titleZh: string;
+    titleEn: string;
+    messageZh?: string;
+    messageEn?: string;
+    xpEarned?: number;
+  } | null>(null);
+
+  const utils = trpc.useUtils();
+  const updateProgressMutation = trpc.progress.update.useMutation({
+    onSuccess: () => {
+      utils.progress.myProgress.invalidate();
+      utils.progress.myRank.invalidate();
+      utils.notifications.unreadCount.invalidate();
+    },
+  });
   
   if (!quest) {
     return (
@@ -109,9 +130,38 @@ export default function QuestDetail() {
   const progress = (completedSteps / steps.length) * 100;
 
   const toggleStep = (stepId: number) => {
-    setSteps(prev => prev.map(step => 
+    const newSteps = steps.map(step => 
       step.id === stepId ? { ...step, completed: !step.completed } : step
-    ));
+    );
+    setSteps(newSteps);
+    
+    const newCompletedSteps = newSteps.filter(s => s.completed).length;
+    const newProgress = (newCompletedSteps / newSteps.length) * 100;
+    const isCompleted = newProgress === 100;
+    const xpEarned = isCompleted ? 50 : 0;
+
+    // Update progress in database if authenticated
+    if (isAuthenticated) {
+      updateProgressMutation.mutate({
+        questId,
+        progress: Math.round(newProgress),
+        completed: isCompleted,
+        xpEarned: isCompleted ? 50 : undefined,
+      });
+
+      // Show celebration if quest completed
+      if (isCompleted && newCompletedSteps > steps.filter(s => s.completed).length) {
+        setCelebration({
+          type: 'quest_complete',
+          titleZh: '任務完成！',
+          titleEn: 'Quest Completed!',
+          messageZh: `恭喜你完成了「${t(quest.titleKey)}」任務！`,
+          messageEn: `Congratulations on completing "${t(quest.titleKey)}"!`,
+          xpEarned: 50,
+        });
+      }
+    }
+    
     toast.success(language === 'zh' ? '進度已更新！' : 'Progress updated!');
   };
 
@@ -425,6 +475,12 @@ export default function QuestDetail() {
           </div>
         </div>
       </main>
+
+      {/* Achievement Celebration Modal */}
+      <AchievementCelebration
+        celebration={celebration}
+        onClose={() => setCelebration(null)}
+      />
     </div>
   );
 }

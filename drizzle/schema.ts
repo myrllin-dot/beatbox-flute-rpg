@@ -96,3 +96,98 @@ export const videoSubmissions = mysqlTable("videoSubmissions", {
 
 export type VideoSubmission = typeof videoSubmissions.$inferSelect;
 export type InsertVideoSubmission = typeof videoSubmissions.$inferInsert;
+
+
+/**
+ * User progress table to track quest completion and XP
+ * Stores each user's progress on quests
+ */
+export const userProgress = mysqlTable("userProgress", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the user */
+  userId: int("userId").notNull(),
+  /** The quest ID that was completed */
+  questId: varchar("questId", { length: 32 }).notNull(),
+  /** Completion percentage (0-100) */
+  progress: int("progress").default(0).notNull(),
+  /** Whether the quest is fully completed */
+  completed: int("completed").default(0).notNull(),
+  /** XP earned from this quest */
+  xpEarned: int("xpEarned").default(0).notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserProgress = typeof userProgress.$inferSelect;
+export type InsertUserProgress = typeof userProgress.$inferInsert;
+
+/**
+ * Achievements table to define available achievements
+ */
+export const achievements = mysqlTable("achievements", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Unique achievement code */
+  code: varchar("code", { length: 64 }).notNull().unique(),
+  /** Achievement name (Chinese) */
+  nameZh: varchar("nameZh", { length: 128 }).notNull(),
+  /** Achievement name (English) */
+  nameEn: varchar("nameEn", { length: 128 }).notNull(),
+  /** Description (Chinese) */
+  descriptionZh: text("descriptionZh"),
+  /** Description (English) */
+  descriptionEn: text("descriptionEn"),
+  /** Icon or badge image URL */
+  iconUrl: text("iconUrl"),
+  /** XP reward for earning this achievement */
+  xpReward: int("xpReward").default(0).notNull(),
+  /** Achievement category: quest, skill, social, special */
+  category: mysqlEnum("category", ["quest", "skill", "social", "special"]).default("quest").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Achievement = typeof achievements.$inferSelect;
+export type InsertAchievement = typeof achievements.$inferInsert;
+
+/**
+ * User achievements table to track earned achievements
+ */
+export const userAchievements = mysqlTable("userAchievements", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the user */
+  userId: int("userId").notNull(),
+  /** Reference to the achievement */
+  achievementId: int("achievementId").notNull(),
+  /** When the achievement was earned */
+  earnedAt: timestamp("earnedAt").defaultNow().notNull(),
+});
+
+export type UserAchievement = typeof userAchievements.$inferSelect;
+export type InsertUserAchievement = typeof userAchievements.$inferInsert;
+
+/**
+ * Notifications table for user notifications
+ */
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the user */
+  userId: int("userId").notNull(),
+  /** Notification type: achievement, quest_complete, video_reviewed, level_up */
+  type: mysqlEnum("type", ["achievement", "quest_complete", "video_reviewed", "level_up"]).notNull(),
+  /** Notification title (Chinese) */
+  titleZh: varchar("titleZh", { length: 256 }).notNull(),
+  /** Notification title (English) */
+  titleEn: varchar("titleEn", { length: 256 }).notNull(),
+  /** Notification message (Chinese) */
+  messageZh: text("messageZh"),
+  /** Notification message (English) */
+  messageEn: text("messageEn"),
+  /** Related entity ID (achievement ID, quest ID, etc.) */
+  relatedId: varchar("relatedId", { length: 64 }),
+  /** Whether the notification has been read */
+  isRead: int("isRead").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
