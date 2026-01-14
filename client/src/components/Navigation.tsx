@@ -5,8 +5,9 @@
  */
 
 import { Link, useLocation } from 'wouter';
-import { Home, Map, Scroll, TrendingUp, User, Globe, Menu, X } from 'lucide-react';
+import { Home, Map, Scroll, TrendingUp, User, Globe, Menu, X, GraduationCap } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/_core/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,7 +23,9 @@ const navItems = [
 export default function Navigation() {
   const [location] = useLocation();
   const { t, language, toggleLanguage } = useLanguage();
+  const { user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isAdmin = user?.role === 'admin';
 
   return (
     <>
@@ -77,6 +80,39 @@ export default function Navigation() {
               </Link>
             );
           })}
+
+          {/* Instructor Dashboard - Admin Only */}
+          {isAdmin && (
+            <Link href="/instructor">
+              <motion.div
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                className={`
+                  relative w-12 h-12 rounded-xl flex items-center justify-center
+                  transition-all duration-300 group
+                  ${location === '/instructor'
+                    ? 'bg-primary text-primary-foreground glow-gold' 
+                    : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+                  }
+                `}
+              >
+                <GraduationCap className="w-5 h-5" />
+                
+                {/* Tooltip */}
+                <div className="absolute left-full ml-3 px-3 py-1.5 rounded-lg bg-popover text-popover-foreground text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-lg">
+                  {language === 'zh' ? '導師後台' : 'Instructor Dashboard'}
+                </div>
+                
+                {/* Active indicator */}
+                {location === '/instructor' && (
+                  <motion.div
+                    layoutId="activeIndicator"
+                    className="absolute -right-[1px] top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-l-full"
+                  />
+                )}
+              </motion.div>
+            </Link>
+          )}
         </div>
 
         {/* Language Toggle */}
@@ -161,6 +197,27 @@ export default function Navigation() {
                   </Link>
                 );
               })}
+
+              {/* Instructor Dashboard - Admin Only */}
+              {isAdmin && (
+                <Link 
+                  href="/instructor"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div
+                    className={`
+                      flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+                      ${location === '/instructor'
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'hover:bg-secondary text-foreground'
+                      }
+                    `}
+                  >
+                    <GraduationCap className="w-5 h-5" />
+                    <span className="font-medium">{language === 'zh' ? '導師後台' : 'Instructor Dashboard'}</span>
+                  </div>
+                </Link>
+              )}
             </nav>
           </motion.div>
         )}

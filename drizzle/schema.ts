@@ -60,3 +60,39 @@ export const commentLikes = mysqlTable("commentLikes", {
 
 export type CommentLike = typeof commentLikes.$inferSelect;
 export type InsertCommentLike = typeof commentLikes.$inferInsert;
+
+
+/**
+ * Video submissions table for student practice videos
+ * Stores uploaded practice videos for instructor review
+ */
+export const videoSubmissions = mysqlTable("videoSubmissions", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The quest ID this submission belongs to */
+  questId: varchar("questId", { length: 32 }).notNull(),
+  /** Reference to the student who submitted */
+  userId: int("userId").notNull(),
+  /** Video file URL (stored in S3) */
+  videoUrl: text("videoUrl").notNull(),
+  /** S3 file key for the video */
+  videoKey: varchar("videoKey", { length: 512 }).notNull(),
+  /** Optional title for the submission */
+  title: varchar("title", { length: 256 }),
+  /** Optional description or notes from student */
+  description: text("description"),
+  /** Submission status: pending, approved, rejected, needs_revision */
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "needs_revision"]).default("pending").notNull(),
+  /** Instructor's score (0-100) */
+  score: int("score"),
+  /** Instructor's feedback */
+  feedback: text("feedback"),
+  /** ID of the instructor who reviewed */
+  reviewedBy: int("reviewedBy"),
+  /** When the review was completed */
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type VideoSubmission = typeof videoSubmissions.$inferSelect;
+export type InsertVideoSubmission = typeof videoSubmissions.$inferInsert;

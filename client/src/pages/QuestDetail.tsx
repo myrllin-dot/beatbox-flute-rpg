@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Metronome from '@/components/Metronome';
 import AudioRecorder from '@/components/AudioRecorder';
 import CommentSection from '@/components/CommentSection';
+import VideoSubmission from '@/components/VideoSubmission';
 
 interface QuestStep {
   id: number;
@@ -381,10 +382,21 @@ export default function QuestDetail() {
               </motion.div>
 
               {/* Comment Section */}
+              {/* Video Submission */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
+                className="lg:col-span-2"
+              >
+                <VideoSubmission questId={questId} />
+              </motion.div>
+
+              {/* Comments Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
                 className="lg:col-span-2"
               >
                 <CommentSection questId={questId} />

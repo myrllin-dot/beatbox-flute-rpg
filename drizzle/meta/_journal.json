@@ -15,6 +15,13 @@
       "when": 1768421115827,
       "tag": "0001_fresh_maginty",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1768421872987,
+      "tag": "0002_slimy_satana",
+      "breakpoints": true
     }
   ]
 }

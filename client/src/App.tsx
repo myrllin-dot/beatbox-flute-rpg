@@ -11,6 +11,7 @@ import Quests from "./pages/Quests";
 import QuestDetail from "./pages/QuestDetail";
 import Progress from "./pages/Progress";
 import Profile from "./pages/Profile";
+import InstructorDashboard from "./pages/InstructorDashboard";
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/quests/:id" component={QuestDetail} />
       <Route path="/progress" component={Progress} />
       <Route path="/profile" component={Profile} />
+      <Route path="/instructor" component={InstructorDashboard} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

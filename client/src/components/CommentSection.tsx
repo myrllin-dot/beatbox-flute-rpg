@@ -1,15 +1,16 @@
 /**
  * CommentSection Component
  * A discussion area for students to ask questions and interact under tutorial videos
- * Features: Post comments, reply to comments, like comments, delete own comments
+ * Features: Post comments, reply to comments, like comments, delete own comments, instructor badge
  */
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, Heart, Reply, Trash2, Send, User, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { MessageCircle, Heart, Reply, Trash2, Send, User, ChevronDown, ChevronUp, Loader2, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
@@ -155,6 +156,9 @@ export default function CommentSection({ questId }: CommentSectionProps) {
     return name.charAt(0).toUpperCase();
   };
 
+  // Check if user is instructor (admin)
+  const isInstructor = (role: string | null) => role === 'admin';
+
   return (
     <div className="magic-card p-6">
       <h3 className="font-display text-lg font-bold text-foreground mb-6 flex items-center gap-2">
@@ -171,7 +175,7 @@ export default function CommentSection({ questId }: CommentSectionProps) {
       <div className="mb-6">
         <div className="flex gap-3">
           <Avatar className="w-10 h-10 shrink-0">
-            <AvatarFallback className="bg-primary/20 text-primary">
+            <AvatarFallback className={user?.role === 'admin' ? "bg-primary text-primary-foreground" : "bg-primary/20 text-primary"}>
               {isAuthenticated ? getInitials(user?.name || null) : <User className="w-4 h-4" />}
             </AvatarFallback>
           </Avatar>
@@ -222,6 +226,7 @@ export default function CommentSection({ questId }: CommentSectionProps) {
               const replies = repliesMap.get(comment.id) || [];
               const isExpanded = expandedReplies.has(comment.id);
               const canDelete = user?.id === comment.userId || user?.role === 'admin';
+              const commentIsInstructor = isInstructor(comment.userRole);
 
               return (
                 <motion.div
@@ -229,20 +234,26 @@ export default function CommentSection({ questId }: CommentSectionProps) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="border-b border-border pb-4 last:border-0"
+                  className={`border-b border-border pb-4 last:border-0 ${commentIsInstructor ? 'bg-primary/5 -mx-2 px-2 py-3 rounded-lg border border-primary/20' : ''}`}
                 >
                   {/* Comment */}
                   <div className="flex gap-3">
-                    <Avatar className="w-10 h-10 shrink-0">
-                      <AvatarFallback className="bg-accent/20 text-accent">
-                        {getInitials(comment.userName)}
+                    <Avatar className={`w-10 h-10 shrink-0 ${commentIsInstructor ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}>
+                      <AvatarFallback className={commentIsInstructor ? "bg-primary text-primary-foreground" : "bg-accent/20 text-accent"}>
+                        {commentIsInstructor ? <GraduationCap className="w-5 h-5" /> : getInitials(comment.userName)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-foreground">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`font-medium ${commentIsInstructor ? 'text-primary' : 'text-foreground'}`}>
                           {comment.userName || (language === 'zh' ? '匿名用戶' : 'Anonymous')}
                         </span>
+                        {commentIsInstructor && (
+                          <Badge variant="default" className="bg-primary/90 text-primary-foreground text-xs px-2 py-0 h-5">
+                            <GraduationCap className="w-3 h-3 mr-1" />
+                            {language === 'zh' ? '導師' : 'Instructor'}
+                          </Badge>
+                        )}
                         <span className="text-xs text-muted-foreground">
                           {formatDate(comment.createdAt)}
                         </span>
@@ -356,18 +367,25 @@ export default function CommentSection({ questId }: CommentSectionProps) {
                           >
                             {replies.map((reply) => {
                               const canDeleteReply = user?.id === reply.userId || user?.role === 'admin';
+                              const replyIsInstructor = isInstructor(reply.userRole);
                               return (
-                                <div key={reply.id} className="flex gap-2">
-                                  <Avatar className="w-8 h-8 shrink-0">
-                                    <AvatarFallback className="bg-accent/20 text-accent text-xs">
-                                      {getInitials(reply.userName)}
+                                <div key={reply.id} className={`flex gap-2 ${replyIsInstructor ? 'bg-primary/5 -ml-2 pl-2 py-2 rounded-lg' : ''}`}>
+                                  <Avatar className={`w-8 h-8 shrink-0 ${replyIsInstructor ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}`}>
+                                    <AvatarFallback className={replyIsInstructor ? "bg-primary text-primary-foreground text-xs" : "bg-accent/20 text-accent text-xs"}>
+                                      {replyIsInstructor ? <GraduationCap className="w-4 h-4" /> : getInitials(reply.userName)}
                                     </AvatarFallback>
                                   </Avatar>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="font-medium text-sm text-foreground">
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                      <span className={`font-medium text-sm ${replyIsInstructor ? 'text-primary' : 'text-foreground'}`}>
                                         {reply.userName || (language === 'zh' ? '匿名用戶' : 'Anonymous')}
                                       </span>
+                                      {replyIsInstructor && (
+                                        <Badge variant="default" className="bg-primary/90 text-primary-foreground text-[10px] px-1.5 py-0 h-4">
+                                          <GraduationCap className="w-2.5 h-2.5 mr-0.5" />
+                                          {language === 'zh' ? '導師' : 'Instructor'}
+                                        </Badge>
+                                      )}
                                       <span className="text-xs text-muted-foreground">
                                         {formatDate(reply.createdAt)}
                                       </span>
