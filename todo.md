@@ -27,3 +27,11 @@
 - [x] Build community page with post feed
 - [x] Build post creation and interaction components
 - [x] Test new features
+
+- [x] Create practice reminder database schema
+- [x] Create challenges database schema
+- [x] Create reminder and challenge API endpoints
+- [x] Build practice reminder settings page
+- [x] Build challenges page with active/completed challenges
+- [x] Build challenge participation and progress tracking
+- [x] Test new features

@@ -15,6 +15,8 @@ import InstructorDashboard from "./pages/InstructorDashboard";
 import Leaderboard from "./pages/Leaderboard";
 import CheckIn from "./pages/CheckIn";
 import Community from "./pages/Community";
+import ReminderSettings from "./pages/ReminderSettings";
+import Challenges from "./pages/Challenges";
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
@@ -29,6 +31,8 @@ function Router() {
       <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/checkin" component={CheckIn} />
       <Route path="/community" component={Community} />
+      <Route path="/reminders" component={ReminderSettings} />
+      <Route path="/challenges" component={Challenges} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

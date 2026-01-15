@@ -20,6 +20,7 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.leaderboard': '排行榜',
     'nav.checkin': '每日簽到',
     'nav.community': '學習社群',
+    'nav.challenges': '學習挑戰',
     
     // Home page
     'home.title': '絕技長笛 RPG',
@@ -302,6 +303,7 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.leaderboard': 'Leaderboard',
     'nav.checkin': 'Check-In',
     'nav.community': 'Community',
+    'nav.challenges': 'Challenges',
     
     // Home page
     'home.title': 'Beatbox Flute RPG',

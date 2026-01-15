@@ -5,7 +5,7 @@
  */
 
 import { Link, useLocation } from 'wouter';
-import { Home, Map, Scroll, TrendingUp, User, Globe, Menu, X, GraduationCap, Trophy, Flame, Users } from 'lucide-react';
+import { Home, Map, Scroll, TrendingUp, User, Globe, Menu, X, GraduationCap, Trophy, Flame, Users, Target } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ const navItems = [
   { path: '/leaderboard', icon: Trophy, labelKey: 'nav.leaderboard' },
   { path: '/checkin', icon: Flame, labelKey: 'nav.checkin' },
   { path: '/community', icon: Users, labelKey: 'nav.community' },
+  { path: '/challenges', icon: Target, labelKey: 'nav.challenges' },
   { path: '/profile', icon: User, labelKey: 'nav.profile' },
 ];
 

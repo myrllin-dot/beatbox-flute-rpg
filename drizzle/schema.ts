@@ -272,3 +272,85 @@ export const postLikes = mysqlTable("postLikes", {
 
 export type PostLike = typeof postLikes.$inferSelect;
 export type InsertPostLike = typeof postLikes.$inferInsert;
+
+
+/**
+ * Practice reminders table for daily practice notifications
+ * Stores user reminder preferences
+ */
+export const practiceReminders = mysqlTable("practiceReminders", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the user */
+  userId: int("userId").notNull().unique(),
+  /** Whether reminders are enabled */
+  enabled: int("enabled").default(1).notNull(),
+  /** Reminder time in HH:MM format (24-hour) */
+  reminderTime: varchar("reminderTime", { length: 5 }).default("19:00").notNull(),
+  /** Days of week to send reminders (comma-separated: 0-6, 0=Sunday) */
+  daysOfWeek: varchar("daysOfWeek", { length: 20 }).default("0,1,2,3,4,5,6").notNull(),
+  /** Timezone offset in minutes from UTC */
+  timezoneOffset: int("timezoneOffset").default(480).notNull(),
+  /** Last reminder sent timestamp */
+  lastReminderSent: timestamp("lastReminderSent"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PracticeReminder = typeof practiceReminders.$inferSelect;
+export type InsertPracticeReminder = typeof practiceReminders.$inferInsert;
+
+/**
+ * Challenges table for learning challenges/events
+ * Stores challenge definitions created by admins
+ */
+export const challenges = mysqlTable("challenges", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Challenge title (Chinese) */
+  titleZh: varchar("titleZh", { length: 256 }).notNull(),
+  /** Challenge title (English) */
+  titleEn: varchar("titleEn", { length: 256 }).notNull(),
+  /** Challenge description (Chinese) */
+  descriptionZh: text("descriptionZh").notNull(),
+  /** Challenge description (English) */
+  descriptionEn: text("descriptionEn").notNull(),
+  /** Challenge type: quest_count, streak, xp_gain, video_submit */
+  challengeType: mysqlEnum("challengeType", ["quest_count", "streak", "xp_gain", "video_submit"]).notNull(),
+  /** Target value to complete the challenge (e.g., 3 quests, 7 day streak) */
+  targetValue: int("targetValue").notNull(),
+  /** XP reward for completing the challenge */
+  xpReward: int("xpReward").default(100).notNull(),
+  /** Special badge ID awarded upon completion (optional) */
+  badgeId: varchar("badgeId", { length: 64 }),
+  /** Challenge start date */
+  startDate: timestamp("startDate").notNull(),
+  /** Challenge end date */
+  endDate: timestamp("endDate").notNull(),
+  /** Whether the challenge is active */
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Challenge = typeof challenges.$inferSelect;
+export type InsertChallenge = typeof challenges.$inferInsert;
+
+/**
+ * Challenge participants table to track user participation
+ */
+export const challengeParticipants = mysqlTable("challengeParticipants", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the challenge */
+  challengeId: int("challengeId").notNull(),
+  /** Reference to the user */
+  userId: int("userId").notNull(),
+  /** Current progress value */
+  currentProgress: int("currentProgress").default(0).notNull(),
+  /** Whether the challenge is completed */
+  isCompleted: int("isCompleted").default(0).notNull(),
+  /** When the challenge was completed (if completed) */
+  completedAt: timestamp("completedAt"),
+  /** When the user joined the challenge */
+  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+});
+
+export type ChallengeParticipant = typeof challengeParticipants.$inferSelect;
+export type InsertChallengeParticipant = typeof challengeParticipants.$inferInsert;

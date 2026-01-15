@@ -10,7 +10,10 @@ import {
   dailyCheckIns, InsertDailyCheckIn,
   communityPosts, InsertCommunityPost,
   postComments, InsertPostComment,
-  postLikes, InsertPostLike
+  postLikes, InsertPostLike,
+  practiceReminders, InsertPracticeReminder,
+  challenges, InsertChallenge,
+  challengeParticipants, InsertChallengeParticipant
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1291,6 +1294,333 @@ export async function deleteCommunityPost(postId: number, userId: number, isAdmi
   await db.delete(postLikes).where(eq(postLikes.postId, postId));
   await db.delete(postComments).where(eq(postComments.postId, postId));
   await db.delete(communityPosts).where(eq(communityPosts.id, postId));
+
+  return { success: true };
+}
+
+
+
+// ============ Practice Reminder Functions ============
+
+/**
+ * Get user's practice reminder settings
+ */
+export async function getPracticeReminder(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    return null;
+  }
+
+  const [reminder] = await db
+    .select()
+    .from(practiceReminders)
+    .where(eq(practiceReminders.userId, userId))
+    .limit(1);
+
+  return reminder || null;
+}
+
+/**
+ * Create or update practice reminder settings
+ */
+export async function upsertPracticeReminder(data: {
+  userId: number;
+  enabled?: boolean;
+  reminderTime?: string;
+  daysOfWeek?: string;
+  timezoneOffset?: number;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const existing = await getPracticeReminder(data.userId);
+
+  if (existing) {
+    await db.update(practiceReminders)
+      .set({
+        enabled: data.enabled !== undefined ? (data.enabled ? 1 : 0) : existing.enabled,
+        reminderTime: data.reminderTime ?? existing.reminderTime,
+        daysOfWeek: data.daysOfWeek ?? existing.daysOfWeek,
+        timezoneOffset: data.timezoneOffset ?? existing.timezoneOffset,
+      })
+      .where(eq(practiceReminders.id, existing.id));
+    return { id: existing.id, isNew: false };
+  } else {
+    const result = await db.insert(practiceReminders).values({
+      userId: data.userId,
+      enabled: data.enabled !== undefined ? (data.enabled ? 1 : 0) : 1,
+      reminderTime: data.reminderTime ?? "19:00",
+      daysOfWeek: data.daysOfWeek ?? "0,1,2,3,4,5,6",
+      timezoneOffset: data.timezoneOffset ?? 480,
+    });
+    return { id: Number(result[0].insertId), isNew: true };
+  }
+}
+
+
+// ============ Challenge Functions ============
+
+/**
+ * Get all active challenges
+ */
+export async function getActiveChallenges() {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  const now = new Date();
+  
+  return await db
+    .select()
+    .from(challenges)
+    .where(and(
+      eq(challenges.isActive, 1),
+      sql`${challenges.startDate} <= ${now}`,
+      sql`${challenges.endDate} >= ${now}`
+    ))
+    .orderBy(challenges.endDate);
+}
+
+/**
+ * Get all challenges (including past ones)
+ */
+export async function getAllChallenges() {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db
+    .select()
+    .from(challenges)
+    .orderBy(desc(challenges.startDate));
+}
+
+/**
+ * Get a challenge by ID
+ */
+export async function getChallengeById(challengeId: number) {
+  const db = await getDb();
+  if (!db) {
+    return null;
+  }
+
+  const [challenge] = await db
+    .select()
+    .from(challenges)
+    .where(eq(challenges.id, challengeId))
+    .limit(1);
+
+  return challenge || null;
+}
+
+/**
+ * Create a new challenge (admin only)
+ */
+export async function createChallenge(data: {
+  titleZh: string;
+  titleEn: string;
+  descriptionZh: string;
+  descriptionEn: string;
+  challengeType: "quest_count" | "streak" | "xp_gain" | "video_submit";
+  targetValue: number;
+  xpReward?: number;
+  badgeId?: string;
+  startDate: Date;
+  endDate: Date;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.insert(challenges).values({
+    titleZh: data.titleZh,
+    titleEn: data.titleEn,
+    descriptionZh: data.descriptionZh,
+    descriptionEn: data.descriptionEn,
+    challengeType: data.challengeType,
+    targetValue: data.targetValue,
+    xpReward: data.xpReward ?? 100,
+    badgeId: data.badgeId ?? null,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    isActive: 1,
+  });
+
+  return { id: Number(result[0].insertId) };
+}
+
+/**
+ * Join a challenge
+ */
+export async function joinChallenge(challengeId: number, userId: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Check if already joined
+  const [existing] = await db
+    .select()
+    .from(challengeParticipants)
+    .where(and(
+      eq(challengeParticipants.challengeId, challengeId),
+      eq(challengeParticipants.userId, userId)
+    ))
+    .limit(1);
+
+  if (existing) {
+    return { id: existing.id, alreadyJoined: true };
+  }
+
+  const result = await db.insert(challengeParticipants).values({
+    challengeId,
+    userId,
+    currentProgress: 0,
+    isCompleted: 0,
+  });
+
+  return { id: Number(result[0].insertId), alreadyJoined: false };
+}
+
+/**
+ * Get user's participation in a challenge
+ */
+export async function getChallengeParticipation(challengeId: number, userId: number) {
+  const db = await getDb();
+  if (!db) {
+    return null;
+  }
+
+  const [participation] = await db
+    .select()
+    .from(challengeParticipants)
+    .where(and(
+      eq(challengeParticipants.challengeId, challengeId),
+      eq(challengeParticipants.userId, userId)
+    ))
+    .limit(1);
+
+  return participation || null;
+}
+
+/**
+ * Get all challenges a user has joined
+ */
+export async function getUserChallenges(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db
+    .select({
+      participantId: challengeParticipants.id,
+      challengeId: challengeParticipants.challengeId,
+      currentProgress: challengeParticipants.currentProgress,
+      isCompleted: challengeParticipants.isCompleted,
+      completedAt: challengeParticipants.completedAt,
+      joinedAt: challengeParticipants.joinedAt,
+      titleZh: challenges.titleZh,
+      titleEn: challenges.titleEn,
+      descriptionZh: challenges.descriptionZh,
+      descriptionEn: challenges.descriptionEn,
+      challengeType: challenges.challengeType,
+      targetValue: challenges.targetValue,
+      xpReward: challenges.xpReward,
+      badgeId: challenges.badgeId,
+      startDate: challenges.startDate,
+      endDate: challenges.endDate,
+      isActive: challenges.isActive,
+    })
+    .from(challengeParticipants)
+    .leftJoin(challenges, eq(challengeParticipants.challengeId, challenges.id))
+    .where(eq(challengeParticipants.userId, userId))
+    .orderBy(desc(challengeParticipants.joinedAt));
+}
+
+/**
+ * Update challenge progress for a user
+ */
+export async function updateChallengeProgress(
+  challengeId: number, 
+  userId: number, 
+  progressIncrement: number
+): Promise<{ completed: boolean; newProgress: number }> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const participation = await getChallengeParticipation(challengeId, userId);
+  if (!participation) {
+    return { completed: false, newProgress: 0 };
+  }
+
+  if (participation.isCompleted) {
+    return { completed: true, newProgress: participation.currentProgress };
+  }
+
+  const challenge = await getChallengeById(challengeId);
+  if (!challenge) {
+    return { completed: false, newProgress: participation.currentProgress };
+  }
+
+  const newProgress = participation.currentProgress + progressIncrement;
+  const isCompleted = newProgress >= challenge.targetValue;
+
+  await db.update(challengeParticipants)
+    .set({
+      currentProgress: newProgress,
+      isCompleted: isCompleted ? 1 : 0,
+      completedAt: isCompleted ? new Date() : null,
+    })
+    .where(eq(challengeParticipants.id, participation.id));
+
+  return { completed: isCompleted, newProgress };
+}
+
+/**
+ * Get challenge leaderboard (top participants)
+ */
+export async function getChallengeLeaderboard(challengeId: number, limit: number = 10) {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db
+    .select({
+      participantId: challengeParticipants.id,
+      userId: challengeParticipants.userId,
+      currentProgress: challengeParticipants.currentProgress,
+      isCompleted: challengeParticipants.isCompleted,
+      completedAt: challengeParticipants.completedAt,
+      userName: users.name,
+    })
+    .from(challengeParticipants)
+    .leftJoin(users, eq(challengeParticipants.userId, users.id))
+    .where(eq(challengeParticipants.challengeId, challengeId))
+    .orderBy(desc(challengeParticipants.currentProgress), challengeParticipants.completedAt)
+    .limit(limit);
+}
+
+/**
+ * Delete a challenge (admin only)
+ */
+export async function deleteChallenge(challengeId: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Delete participants first
+  await db.delete(challengeParticipants).where(eq(challengeParticipants.challengeId, challengeId));
+  await db.delete(challenges).where(eq(challenges.id, challengeId));
 
   return { success: true };
 }

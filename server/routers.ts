@@ -47,6 +47,20 @@ import {
   addPostComment,
   getPostComments,
   deleteCommunityPost,
+  // Practice Reminders
+  getPracticeReminder,
+  upsertPracticeReminder,
+  // Challenges
+  getActiveChallenges,
+  getAllChallenges,
+  getChallengeById,
+  createChallenge,
+  joinChallenge,
+  getChallengeParticipation,
+  getUserChallenges,
+  updateChallengeProgress,
+  getChallengeLeaderboard,
+  deleteChallenge,
 } from "./db";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -502,6 +516,135 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const isAdmin = ctx.user.role === 'admin';
         return await deleteCommunityPost(input.postId, ctx.user.id, isAdmin);
+      }),
+  }),
+
+  // Practice Reminders API
+  reminder: router({
+    // Get user's reminder settings
+    get: protectedProcedure
+      .query(async ({ ctx }) => {
+        const reminder = await getPracticeReminder(ctx.user.id);
+        if (!reminder) {
+          return {
+            enabled: true,
+            reminderTime: '19:00',
+            daysOfWeek: '0,1,2,3,4,5,6',
+            timezoneOffset: 480,
+          };
+        }
+        return {
+          enabled: reminder.enabled === 1,
+          reminderTime: reminder.reminderTime,
+          daysOfWeek: reminder.daysOfWeek,
+          timezoneOffset: reminder.timezoneOffset,
+        };
+      }),
+
+    // Update reminder settings
+    update: protectedProcedure
+      .input(z.object({
+        enabled: z.boolean().optional(),
+        reminderTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+        daysOfWeek: z.string().optional(),
+        timezoneOffset: z.number().min(-720).max(840).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await upsertPracticeReminder({
+          userId: ctx.user.id,
+          enabled: input.enabled,
+          reminderTime: input.reminderTime,
+          daysOfWeek: input.daysOfWeek,
+          timezoneOffset: input.timezoneOffset,
+        });
+      }),
+  }),
+
+  // Challenges API
+  challenges: router({
+    // Get active challenges
+    active: publicProcedure
+      .query(async () => {
+        return await getActiveChallenges();
+      }),
+
+    // Get all challenges (admin)
+    all: adminProcedure
+      .query(async () => {
+        return await getAllChallenges();
+      }),
+
+    // Get single challenge
+    get: publicProcedure
+      .input(z.object({ challengeId: z.number() }))
+      .query(async ({ input }) => {
+        return await getChallengeById(input.challengeId);
+      }),
+
+    // Create a challenge (admin only)
+    create: adminProcedure
+      .input(z.object({
+        titleZh: z.string().min(1).max(256),
+        titleEn: z.string().min(1).max(256),
+        descriptionZh: z.string().min(1),
+        descriptionEn: z.string().min(1),
+        challengeType: z.enum(['quest_count', 'streak', 'xp_gain', 'video_submit']),
+        targetValue: z.number().min(1),
+        xpReward: z.number().min(0).optional(),
+        badgeId: z.string().optional(),
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createChallenge({
+          titleZh: input.titleZh,
+          titleEn: input.titleEn,
+          descriptionZh: input.descriptionZh,
+          descriptionEn: input.descriptionEn,
+          challengeType: input.challengeType,
+          targetValue: input.targetValue,
+          xpReward: input.xpReward,
+          badgeId: input.badgeId,
+          startDate: new Date(input.startDate),
+          endDate: new Date(input.endDate),
+        });
+      }),
+
+    // Join a challenge
+    join: protectedProcedure
+      .input(z.object({ challengeId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        return await joinChallenge(input.challengeId, ctx.user.id);
+      }),
+
+    // Get user's participation in a challenge
+    participation: protectedProcedure
+      .input(z.object({ challengeId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return await getChallengeParticipation(input.challengeId, ctx.user.id);
+      }),
+
+    // Get all challenges user has joined
+    myChallenges: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getUserChallenges(ctx.user.id);
+      }),
+
+    // Get challenge leaderboard
+    leaderboard: publicProcedure
+      .input(z.object({ 
+        challengeId: z.number(),
+        limit: z.number().min(1).max(50).optional(),
+      }))
+      .query(async ({ input }) => {
+        return await getChallengeLeaderboard(input.challengeId, input.limit || 10);
+      }),
+
+    // Delete a challenge (admin only)
+    delete: adminProcedure
+      .input(z.object({ challengeId: z.number() }))
+      .mutation(async ({ input }) => {
+        return await deleteChallenge(input.challengeId);
       }),
   }),
 });
