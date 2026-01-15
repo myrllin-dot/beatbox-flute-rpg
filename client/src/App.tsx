@@ -17,6 +17,9 @@ import CheckIn from "./pages/CheckIn";
 import Community from "./pages/Community";
 import ReminderSettings from "./pages/ReminderSettings";
 import Challenges from "./pages/Challenges";
+import LearningPath from "./pages/LearningPath";
+import Booking from "./pages/Booking";
+import InstructorBooking from "./pages/InstructorBooking";
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
@@ -33,6 +36,9 @@ function Router() {
       <Route path="/community" component={Community} />
       <Route path="/reminders" component={ReminderSettings} />
       <Route path="/challenges" component={Challenges} />
+      <Route path="/learning-path" component={LearningPath} />
+      <Route path="/booking" component={Booking} />
+      <Route path="/instructor/booking" component={InstructorBooking} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

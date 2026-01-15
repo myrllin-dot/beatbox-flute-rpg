@@ -13,7 +13,11 @@ import {
   postLikes, InsertPostLike,
   practiceReminders, InsertPracticeReminder,
   challenges, InsertChallenge,
-  challengeParticipants, InsertChallengeParticipant
+  challengeParticipants, InsertChallengeParticipant,
+  skillPrerequisites, InsertSkillPrerequisite,
+  userSkillProgress, InsertUserSkillProgress,
+  bookingSlots, InsertBookingSlot,
+  appointments, InsertAppointment
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1623,4 +1627,367 @@ export async function deleteChallenge(challengeId: number) {
   await db.delete(challenges).where(eq(challenges.id, challengeId));
 
   return { success: true };
+}
+
+
+// ==================== Learning Path Functions ====================
+
+/**
+ * Get user's skill progress for all skills
+ */
+export async function getUserSkillProgress(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(userSkillProgress).where(eq(userSkillProgress.userId, userId));
+}
+
+/**
+ * Get or create user skill progress for a specific skill
+ */
+export async function getOrCreateUserSkillProgress(userId: number, skillId: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const existing = await db.select()
+    .from(userSkillProgress)
+    .where(and(eq(userSkillProgress.userId, userId), eq(userSkillProgress.skillId, skillId)))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  await db.insert(userSkillProgress).values({
+    userId,
+    skillId,
+    masteryLevel: 0,
+    practiceCount: 0,
+  });
+
+  const created = await db.select()
+    .from(userSkillProgress)
+    .where(and(eq(userSkillProgress.userId, userId), eq(userSkillProgress.skillId, skillId)))
+    .limit(1);
+
+  return created[0];
+}
+
+/**
+ * Update user skill progress
+ */
+export async function updateUserSkillProgress(
+  userId: number,
+  skillId: string,
+  updates: { masteryLevel?: number; practiceCount?: number; notes?: string }
+) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Ensure the record exists
+  await getOrCreateUserSkillProgress(userId, skillId);
+
+  const updateData: Record<string, unknown> = {};
+  if (updates.masteryLevel !== undefined) updateData.masteryLevel = updates.masteryLevel;
+  if (updates.practiceCount !== undefined) updateData.practiceCount = updates.practiceCount;
+  if (updates.notes !== undefined) updateData.notes = updates.notes;
+  updateData.lastPracticed = new Date();
+
+  await db.update(userSkillProgress)
+    .set(updateData)
+    .where(and(eq(userSkillProgress.userId, userId), eq(userSkillProgress.skillId, skillId)));
+
+  return { success: true };
+}
+
+/**
+ * Get skill prerequisites
+ */
+export async function getSkillPrerequisites(skillId: string) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select()
+    .from(skillPrerequisites)
+    .where(eq(skillPrerequisites.skillId, skillId))
+    .orderBy(skillPrerequisites.orderIndex);
+}
+
+/**
+ * Get all skill prerequisites (for building the skill tree)
+ */
+export async function getAllSkillPrerequisites() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(skillPrerequisites);
+}
+
+/**
+ * Add a skill prerequisite
+ */
+export async function addSkillPrerequisite(skillId: string, prerequisiteId: string, orderIndex: number = 0) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.insert(skillPrerequisites).values({
+    skillId,
+    prerequisiteId,
+    orderIndex,
+  });
+
+  return { success: true };
+}
+
+// ==================== Booking Functions ====================
+
+/**
+ * Create a booking slot (instructor only)
+ */
+export async function createBookingSlot(slot: Omit<InsertBookingSlot, 'id' | 'createdAt'>) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db.insert(bookingSlots).values(slot);
+  return { success: true, id: result[0].insertId };
+}
+
+/**
+ * Get available booking slots
+ */
+export async function getAvailableBookingSlots(instructorId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const now = new Date();
+  
+  let query = db.select()
+    .from(bookingSlots)
+    .where(and(
+      eq(bookingSlots.isAvailable, 1),
+      sql`${bookingSlots.startTime} > ${now}`
+    ))
+    .orderBy(bookingSlots.startTime);
+
+  if (instructorId) {
+    query = db.select()
+      .from(bookingSlots)
+      .where(and(
+        eq(bookingSlots.instructorId, instructorId),
+        eq(bookingSlots.isAvailable, 1),
+        sql`${bookingSlots.startTime} > ${now}`
+      ))
+      .orderBy(bookingSlots.startTime);
+  }
+
+  return query;
+}
+
+/**
+ * Get instructor's all booking slots
+ */
+export async function getInstructorBookingSlots(instructorId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select()
+    .from(bookingSlots)
+    .where(eq(bookingSlots.instructorId, instructorId))
+    .orderBy(desc(bookingSlots.startTime));
+}
+
+/**
+ * Update a booking slot
+ */
+export async function updateBookingSlot(
+  slotId: number,
+  updates: { isAvailable?: number; meetingLink?: string; notes?: string; price?: number }
+) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.update(bookingSlots).set(updates).where(eq(bookingSlots.id, slotId));
+  return { success: true };
+}
+
+/**
+ * Delete a booking slot
+ */
+export async function deleteBookingSlot(slotId: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.delete(bookingSlots).where(eq(bookingSlots.id, slotId));
+  return { success: true };
+}
+
+/**
+ * Book an appointment
+ */
+export async function createAppointment(appointment: Omit<InsertAppointment, 'id' | 'createdAt' | 'updatedAt'>) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Mark the slot as unavailable
+  await db.update(bookingSlots)
+    .set({ isAvailable: 0 })
+    .where(eq(bookingSlots.id, appointment.slotId));
+
+  const result = await db.insert(appointments).values(appointment);
+  return { success: true, id: result[0].insertId };
+}
+
+/**
+ * Get student's appointments
+ */
+export async function getStudentAppointments(studentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select({
+    id: appointments.id,
+    slotId: appointments.slotId,
+    studentId: appointments.studentId,
+    instructorId: appointments.instructorId,
+    status: appointments.status,
+    topic: appointments.topic,
+    studentNotes: appointments.studentNotes,
+    instructorNotes: appointments.instructorNotes,
+    rating: appointments.rating,
+    feedback: appointments.feedback,
+    createdAt: appointments.createdAt,
+    startTime: bookingSlots.startTime,
+    endTime: bookingSlots.endTime,
+    duration: bookingSlots.duration,
+    meetingLink: bookingSlots.meetingLink,
+    instructorName: users.name,
+  })
+    .from(appointments)
+    .leftJoin(bookingSlots, eq(appointments.slotId, bookingSlots.id))
+    .leftJoin(users, eq(appointments.instructorId, users.id))
+    .where(eq(appointments.studentId, studentId))
+    .orderBy(desc(bookingSlots.startTime));
+}
+
+/**
+ * Get instructor's appointments
+ */
+export async function getInstructorAppointments(instructorId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select({
+    id: appointments.id,
+    slotId: appointments.slotId,
+    studentId: appointments.studentId,
+    instructorId: appointments.instructorId,
+    status: appointments.status,
+    topic: appointments.topic,
+    studentNotes: appointments.studentNotes,
+    instructorNotes: appointments.instructorNotes,
+    rating: appointments.rating,
+    feedback: appointments.feedback,
+    createdAt: appointments.createdAt,
+    startTime: bookingSlots.startTime,
+    endTime: bookingSlots.endTime,
+    duration: bookingSlots.duration,
+    meetingLink: bookingSlots.meetingLink,
+    studentName: users.name,
+    studentEmail: users.email,
+  })
+    .from(appointments)
+    .leftJoin(bookingSlots, eq(appointments.slotId, bookingSlots.id))
+    .leftJoin(users, eq(appointments.studentId, users.id))
+    .where(eq(appointments.instructorId, instructorId))
+    .orderBy(desc(bookingSlots.startTime));
+}
+
+/**
+ * Update appointment status
+ */
+export async function updateAppointmentStatus(
+  appointmentId: number,
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled',
+  notes?: string
+) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const updateData: Record<string, unknown> = { status };
+  if (notes) updateData.instructorNotes = notes;
+
+  // If cancelled, make the slot available again
+  if (status === 'cancelled') {
+    const apt = await db.select().from(appointments).where(eq(appointments.id, appointmentId)).limit(1);
+    if (apt.length > 0) {
+      await db.update(bookingSlots).set({ isAvailable: 1 }).where(eq(bookingSlots.id, apt[0].slotId));
+    }
+  }
+
+  await db.update(appointments).set(updateData).where(eq(appointments.id, appointmentId));
+  return { success: true };
+}
+
+/**
+ * Rate an appointment (student)
+ */
+export async function rateAppointment(appointmentId: number, rating: number, feedback?: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const updateData: Record<string, unknown> = { rating };
+  if (feedback) updateData.feedback = feedback;
+
+  await db.update(appointments).set(updateData).where(eq(appointments.id, appointmentId));
+  return { success: true };
+}
+
+/**
+ * Get appointment by ID
+ */
+export async function getAppointmentById(appointmentId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select({
+    id: appointments.id,
+    slotId: appointments.slotId,
+    studentId: appointments.studentId,
+    instructorId: appointments.instructorId,
+    status: appointments.status,
+    topic: appointments.topic,
+    studentNotes: appointments.studentNotes,
+    instructorNotes: appointments.instructorNotes,
+    rating: appointments.rating,
+    feedback: appointments.feedback,
+    createdAt: appointments.createdAt,
+    startTime: bookingSlots.startTime,
+    endTime: bookingSlots.endTime,
+    duration: bookingSlots.duration,
+    meetingLink: bookingSlots.meetingLink,
+  })
+    .from(appointments)
+    .leftJoin(bookingSlots, eq(appointments.slotId, bookingSlots.id))
+    .where(eq(appointments.id, appointmentId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
 }

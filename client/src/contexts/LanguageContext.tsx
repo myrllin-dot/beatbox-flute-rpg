@@ -21,6 +21,8 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.checkin': '每日簽到',
     'nav.community': '學習社群',
     'nav.challenges': '學習挑戰',
+    'nav.learningPath': '學習路徑',
+    'nav.booking': '預約課程',
     
     // Home page
     'home.title': '絕技長笛 RPG',
@@ -304,6 +306,8 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.checkin': 'Check-In',
     'nav.community': 'Community',
     'nav.challenges': 'Challenges',
+    'nav.learningPath': 'Learning Path',
+    'nav.booking': 'Book Session',
     
     // Home page
     'home.title': 'Beatbox Flute RPG',

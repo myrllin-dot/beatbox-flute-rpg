@@ -35,3 +35,11 @@
 - [x] Build challenges page with active/completed challenges
 - [x] Build challenge participation and progress tracking
 - [x] Test new features
+
+- [x] Create learning path and booking database schema
+- [x] Create learning path recommendation API
+- [x] Build learning path recommendation page
+- [x] Create booking slots and appointments API
+- [x] Build booking page for students
+- [x] Build booking management for instructor
+- [x] Test new features

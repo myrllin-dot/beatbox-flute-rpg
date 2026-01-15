@@ -354,3 +354,102 @@ export const challengeParticipants = mysqlTable("challengeParticipants", {
 
 export type ChallengeParticipant = typeof challengeParticipants.$inferSelect;
 export type InsertChallengeParticipant = typeof challengeParticipants.$inferInsert;
+
+
+/**
+ * Skill prerequisites table to define learning path dependencies
+ * Defines which skills must be completed before unlocking others
+ */
+export const skillPrerequisites = mysqlTable("skillPrerequisites", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The skill/quest that has prerequisites */
+  skillId: varchar("skillId", { length: 32 }).notNull(),
+  /** The prerequisite skill/quest that must be completed first */
+  prerequisiteId: varchar("prerequisiteId", { length: 32 }).notNull(),
+  /** Order of prerequisite (for multiple prerequisites) */
+  orderIndex: int("orderIndex").default(0).notNull(),
+});
+
+export type SkillPrerequisite = typeof skillPrerequisites.$inferSelect;
+export type InsertSkillPrerequisite = typeof skillPrerequisites.$inferInsert;
+
+/**
+ * User skill progress table to track individual skill mastery
+ */
+export const userSkillProgress = mysqlTable("userSkillProgress", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the user */
+  userId: int("userId").notNull(),
+  /** The skill/quest ID */
+  skillId: varchar("skillId", { length: 32 }).notNull(),
+  /** Mastery level: 0=not started, 1=in progress, 2=completed, 3=mastered */
+  masteryLevel: int("masteryLevel").default(0).notNull(),
+  /** Practice count for this skill */
+  practiceCount: int("practiceCount").default(0).notNull(),
+  /** Last practice timestamp */
+  lastPracticed: timestamp("lastPracticed"),
+  /** Notes or feedback for this skill */
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserSkillProgress = typeof userSkillProgress.$inferSelect;
+export type InsertUserSkillProgress = typeof userSkillProgress.$inferInsert;
+
+/**
+ * Booking slots table for instructor availability
+ */
+export const bookingSlots = mysqlTable("bookingSlots", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The instructor user ID (admin) */
+  instructorId: int("instructorId").notNull(),
+  /** Start time of the slot */
+  startTime: timestamp("startTime").notNull(),
+  /** End time of the slot */
+  endTime: timestamp("endTime").notNull(),
+  /** Duration in minutes */
+  duration: int("duration").default(30).notNull(),
+  /** Whether the slot is available for booking */
+  isAvailable: int("isAvailable").default(1).notNull(),
+  /** Price in cents (0 for free) */
+  price: int("price").default(0).notNull(),
+  /** Meeting link (Zoom, Google Meet, etc.) */
+  meetingLink: varchar("meetingLink", { length: 512 }),
+  /** Notes about the slot */
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type BookingSlot = typeof bookingSlots.$inferSelect;
+export type InsertBookingSlot = typeof bookingSlots.$inferInsert;
+
+/**
+ * Appointments table for booked sessions
+ */
+export const appointments = mysqlTable("appointments", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Reference to the booking slot */
+  slotId: int("slotId").notNull(),
+  /** Reference to the student user */
+  studentId: int("studentId").notNull(),
+  /** Reference to the instructor user */
+  instructorId: int("instructorId").notNull(),
+  /** Status: pending, confirmed, completed, cancelled */
+  status: mysqlEnum("status", ["pending", "confirmed", "completed", "cancelled"]).default("pending").notNull(),
+  /** Topic or goal for the session */
+  topic: text("topic"),
+  /** Student's questions or notes before the session */
+  studentNotes: text("studentNotes"),
+  /** Instructor's notes after the session */
+  instructorNotes: text("instructorNotes"),
+  /** Rating given by student (1-5) */
+  rating: int("rating"),
+  /** Feedback from student */
+  feedback: text("feedback"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Appointment = typeof appointments.$inferSelect;
+export type InsertAppointment = typeof appointments.$inferInsert;

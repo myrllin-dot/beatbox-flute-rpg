@@ -43,6 +43,13 @@
       "when": 1768449289188,
       "tag": "0005_cynical_satana",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1768452529222,
+      "tag": "0006_fancy_stardust",
+      "breakpoints": true
     }
   ]
 }

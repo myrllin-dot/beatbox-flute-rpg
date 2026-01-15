@@ -58,6 +58,24 @@ import {
   joinChallenge,
   getChallengeParticipation,
   getUserChallenges,
+  // Learning Path
+  getUserSkillProgress,
+  updateUserSkillProgress,
+  getSkillPrerequisites,
+  getAllSkillPrerequisites,
+  addSkillPrerequisite,
+  // Booking
+  createBookingSlot,
+  getAvailableBookingSlots,
+  getInstructorBookingSlots,
+  updateBookingSlot,
+  deleteBookingSlot,
+  createAppointment,
+  getStudentAppointments,
+  getInstructorAppointments,
+  updateAppointmentStatus,
+  rateAppointment,
+  getAppointmentById,
   updateChallengeProgress,
   getChallengeLeaderboard,
   deleteChallenge,
@@ -645,6 +663,182 @@ export const appRouter = router({
       .input(z.object({ challengeId: z.number() }))
       .mutation(async ({ input }) => {
         return await deleteChallenge(input.challengeId);
+      }),
+  }),
+
+  // Learning Path API
+  learningPath: router({
+    // Get user's skill progress
+    myProgress: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getUserSkillProgress(ctx.user.id);
+      }),
+
+    // Update skill progress
+    updateProgress: protectedProcedure
+      .input(z.object({
+        skillId: z.string(),
+        masteryLevel: z.number().min(0).max(3).optional(),
+        practiceCount: z.number().min(0).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await updateUserSkillProgress(ctx.user.id, input.skillId, {
+          masteryLevel: input.masteryLevel,
+          practiceCount: input.practiceCount,
+          notes: input.notes,
+        });
+      }),
+
+    // Get skill prerequisites
+    prerequisites: publicProcedure
+      .input(z.object({ skillId: z.string() }))
+      .query(async ({ input }) => {
+        return await getSkillPrerequisites(input.skillId);
+      }),
+
+    // Get all prerequisites (for skill tree)
+    allPrerequisites: publicProcedure
+      .query(async () => {
+        return await getAllSkillPrerequisites();
+      }),
+
+    // Add prerequisite (admin only)
+    addPrerequisite: adminProcedure
+      .input(z.object({
+        skillId: z.string(),
+        prerequisiteId: z.string(),
+        orderIndex: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await addSkillPrerequisite(input.skillId, input.prerequisiteId, input.orderIndex || 0);
+      }),
+  }),
+
+  // Booking API
+  booking: router({
+    // Get available slots
+    availableSlots: publicProcedure
+      .input(z.object({ instructorId: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        return await getAvailableBookingSlots(input?.instructorId);
+      }),
+
+    // Create a booking slot (instructor only)
+    createSlot: adminProcedure
+      .input(z.object({
+        startTime: z.string(),
+        endTime: z.string(),
+        duration: z.number().min(15).max(120).optional(),
+        price: z.number().min(0).optional(),
+        meetingLink: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await createBookingSlot({
+          instructorId: ctx.user.id,
+          startTime: new Date(input.startTime),
+          endTime: new Date(input.endTime),
+          duration: input.duration || 30,
+          price: input.price || 0,
+          meetingLink: input.meetingLink,
+          notes: input.notes,
+        });
+      }),
+
+    // Get instructor's slots
+    mySlots: adminProcedure
+      .query(async ({ ctx }) => {
+        return await getInstructorBookingSlots(ctx.user.id);
+      }),
+
+    // Update a slot
+    updateSlot: adminProcedure
+      .input(z.object({
+        slotId: z.number(),
+        isAvailable: z.number().min(0).max(1).optional(),
+        meetingLink: z.string().optional(),
+        notes: z.string().optional(),
+        price: z.number().min(0).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await updateBookingSlot(input.slotId, {
+          isAvailable: input.isAvailable,
+          meetingLink: input.meetingLink,
+          notes: input.notes,
+          price: input.price,
+        });
+      }),
+
+    // Delete a slot
+    deleteSlot: adminProcedure
+      .input(z.object({ slotId: z.number() }))
+      .mutation(async ({ input }) => {
+        return await deleteBookingSlot(input.slotId);
+      }),
+
+    // Book an appointment
+    book: protectedProcedure
+      .input(z.object({
+        slotId: z.number(),
+        topic: z.string().optional(),
+        studentNotes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Get the slot to find the instructor
+        const slots = await getAvailableBookingSlots();
+        const slot = slots.find(s => s.id === input.slotId);
+        if (!slot) {
+          throw new Error("Slot not found or not available");
+        }
+        return await createAppointment({
+          slotId: input.slotId,
+          studentId: ctx.user.id,
+          instructorId: slot.instructorId,
+          topic: input.topic,
+          studentNotes: input.studentNotes,
+        });
+      }),
+
+    // Get student's appointments
+    myAppointments: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await getStudentAppointments(ctx.user.id);
+      }),
+
+    // Get instructor's appointments
+    instructorAppointments: adminProcedure
+      .query(async ({ ctx }) => {
+        return await getInstructorAppointments(ctx.user.id);
+      }),
+
+    // Update appointment status (instructor)
+    updateStatus: adminProcedure
+      .input(z.object({
+        appointmentId: z.number(),
+        status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await updateAppointmentStatus(input.appointmentId, input.status, input.notes);
+      }),
+
+    // Rate an appointment (student)
+    rate: protectedProcedure
+      .input(z.object({
+        appointmentId: z.number(),
+        rating: z.number().min(1).max(5),
+        feedback: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await rateAppointment(input.appointmentId, input.rating, input.feedback);
+      }),
+
+    // Get appointment details
+    getAppointment: protectedProcedure
+      .input(z.object({ appointmentId: z.number() }))
+      .query(async ({ input }) => {
+        return await getAppointmentById(input.appointmentId);
       }),
   }),
 });
