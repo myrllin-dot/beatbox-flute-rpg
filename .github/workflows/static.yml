@@ -21,6 +21,9 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
+env:
+  VITE_API_URL: https://your-backend.railway.app/api/trpc
+
 jobs:
   # Single deploy job since we're just deploying
   deploy:
