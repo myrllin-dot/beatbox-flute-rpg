@@ -45,7 +45,7 @@ const questData: Record<string, QuestData> = {
   '1-1': {
     titleKey: 'quest.1-1.title',
     descKey: 'quest.1-1.description',
-    videoUrl: 'https://youtu.be/SsEbqkEE92A',
+    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
     duration: 15,
     difficulty: 'easy',
     steps: [
@@ -59,7 +59,7 @@ const questData: Record<string, QuestData> = {
   '1-2': {
     titleKey: 'quest.1-2.title',
     descKey: 'quest.1-2.description',
-    videoUrl: 'https://youtu.be/jfluG7Xj3KI',
+    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
     duration: 20,
     difficulty: 'easy',
     steps: [
@@ -73,7 +73,7 @@ const questData: Record<string, QuestData> = {
   '1-3': {
     titleKey: 'quest.1-3.title',
     descKey: 'quest.1-3.description',
-    videoUrl: 'https://www.youtube.com/watch?v=0x6H2uOW6nI',
+    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
     duration: 25,
     difficulty: 'medium',
     steps: [
