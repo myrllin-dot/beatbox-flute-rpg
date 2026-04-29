@@ -20,11 +20,13 @@ import Challenges from "./pages/Challenges";
 import LearningPath from "./pages/LearningPath";
 import Booking from "./pages/Booking";
 import InstructorBooking from "./pages/InstructorBooking";
+import Login from "./pages/Login";
+
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={Login} />
       <Route path="/village" component={Village} />
       <Route path="/quests" component={Quests} />
       <Route path="/quests/:id" component={QuestDetail} />
