@@ -3,10 +3,9 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { activationCodes } from "./db";
+import { activationCodes, getDb } from "./db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { getDb } from "./db";
 import {
   getCommentsByQuestId,
   createComment,
@@ -19,30 +18,25 @@ import {
   getAllSubmissions,
   reviewSubmission,
   deleteSubmission,
-  // Progress & Leaderboard
   getUserProgress,
   updateUserProgress,
   getAllUserProgress,
   getLeaderboard,
   getUserRank,
-  // Achievements
   getAllAchievements,
   getUserAchievements,
   awardAchievement,
   createAchievement,
-  // Notifications
   createNotification,
   getUserNotifications,
   markNotificationRead,
   markAllNotificationsRead,
   getUnreadNotificationCount,
-  // Check-in
   hasCheckedInToday,
   getUserStreak,
   performCheckIn,
   getCheckInHistory,
   getCheckInStats,
-  // Community
   createCommunityPost,
   getCommunityPosts,
   getPostById,
@@ -51,10 +45,8 @@ import {
   addPostComment,
   getPostComments,
   deleteCommunityPost,
-  // Practice Reminders
   getPracticeReminder,
   upsertPracticeReminder,
-  // Challenges
   getActiveChallenges,
   getAllChallenges,
   getChallengeById,
@@ -62,13 +54,11 @@ import {
   joinChallenge,
   getChallengeParticipation,
   getUserChallenges,
-  // Learning Path
   getUserSkillProgress,
   updateUserSkillProgress,
   getSkillPrerequisites,
   getAllSkillPrerequisites,
   addSkillPrerequisite,
-  // Booking
   createBookingSlot,
   getAvailableBookingSlots,
   getInstructorBookingSlots,
@@ -88,69 +78,61 @@ import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
 
 export const appRouter = router({
-  // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
-auth: router({
+
+  auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
- 
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
- 
+
     activateCode: protectedProcedure
       .input(z.object({ code: z.string().min(1).max(64) }))
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         if (!db) throw new Error("Database not available");
- 
-        // 檢查序號是否存在且未使用
+
         const [codeRecord] = await db
           .select()
           .from(activationCodes)
           .where(eq(activationCodes.code, input.code.toUpperCase()))
           .limit(1);
- 
+
         if (!codeRecord) {
           throw new Error("序號不存在或已無效");
         }
- 
+
         if (codeRecord.usedBy !== null) {
-          // 如果是自己已用過
           if (codeRecord.usedBy === ctx.user.id) {
             throw new Error("此序號已被使用過");
           }
           throw new Error("此序號已被其他用戶使用");
         }
- 
-        // 啟用序號，升級用戶為 pro
+
         await db
           .update(activationCodes)
           .set({ usedBy: ctx.user.id, usedAt: new Date() })
           .where(eq(activationCodes.code, input.code.toUpperCase()));
- 
+
         await db
           .update(users)
           .set({ tier: 'pro', activationCode: input.code.toUpperCase() } as any)
           .where(eq(users.id, ctx.user.id));
- 
+
         return { success: true, tier: 'pro' };
       }),
   }),
-  }),
 
-  // Comments API for quest discussions
   comments: router({
-    // Get all comments for a quest
     list: publicProcedure
       .input(z.object({ questId: z.string() }))
       .query(async ({ input, ctx }) => {
-        const comments = await getCommentsByQuestId(input.questId, ctx.user?.id);
-        return comments;
+        return await getCommentsByQuestId(input.questId, ctx.user?.id);
       }),
 
-    // Create a new comment (requires auth)
     create: protectedProcedure
       .input(z.object({
         questId: z.string(),
@@ -158,16 +140,14 @@ auth: router({
         parentId: z.number().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const result = await createComment({
+        return await createComment({
           questId: input.questId,
           userId: ctx.user.id,
           content: input.content,
           parentId: input.parentId,
         });
-        return result;
       }),
 
-    // Update a comment (only owner)
     update: protectedProcedure
       .input(z.object({
         commentId: z.number(),
@@ -177,15 +157,12 @@ auth: router({
         return await updateComment(input.commentId, ctx.user.id, input.content);
       }),
 
-    // Delete a comment (owner or admin)
     delete: protectedProcedure
       .input(z.object({ commentId: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        const isAdmin = ctx.user.role === 'admin';
-        return await deleteComment(input.commentId, ctx.user.id, isAdmin);
+        return await deleteComment(input.commentId, ctx.user.id, ctx.user.role === 'admin');
       }),
 
-    // Toggle like on a comment
     toggleLike: protectedProcedure
       .input(z.object({ commentId: z.number() }))
       .mutation(async ({ input, ctx }) => {
@@ -193,16 +170,13 @@ auth: router({
       }),
   }),
 
-  // Video Submissions API
   submissions: router({
-    // Get user's submissions for a quest
     mySubmissions: protectedProcedure
       .input(z.object({ questId: z.string() }))
       .query(async ({ input, ctx }) => {
         return await getUserSubmissionsForQuest(input.questId, ctx.user.id);
       }),
 
-    // Upload a new video submission
     upload: protectedProcedure
       .input(z.object({
         questId: z.string(),
@@ -213,14 +187,10 @@ auth: router({
         fileName: z.string(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // Decode base64 and upload to S3
         const buffer = Buffer.from(input.videoBase64, 'base64');
         const fileKey = `submissions/${ctx.user.id}/${input.questId}/${nanoid()}-${input.fileName}`;
-        
         const { url } = await storagePut(fileKey, buffer, input.mimeType);
-        
-        // Create database record
-        const result = await createVideoSubmission({
+        return await createVideoSubmission({
           questId: input.questId,
           userId: ctx.user.id,
           videoUrl: url,
@@ -228,32 +198,25 @@ auth: router({
           title: input.title,
           description: input.description,
         });
-
-        return result;
       }),
 
-    // Delete a submission (owner or admin)
     delete: protectedProcedure
       .input(z.object({ submissionId: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        const isAdmin = ctx.user.role === 'admin';
-        return await deleteSubmission(input.submissionId, ctx.user.id, isAdmin);
+        return await deleteSubmission(input.submissionId, ctx.user.id, ctx.user.role === 'admin');
       }),
 
-    // Admin: Get all submissions
     listAll: adminProcedure
       .input(z.object({ status: z.string().optional() }))
       .query(async ({ input }) => {
         return await getAllSubmissions(input.status);
       }),
 
-    // Admin: Get pending submissions
     pending: adminProcedure
       .query(async () => {
         return await getPendingSubmissions();
       }),
 
-    // Admin: Review a submission
     review: adminProcedure
       .input(z.object({
         submissionId: z.number(),
@@ -272,9 +235,7 @@ auth: router({
       }),
   }),
 
-  // User Progress API
   progress: router({
-    // Get user's progress for a specific quest (包含步驟打勾狀態)
     getQuestProgress: protectedProcedure
       .input(z.object({ questId: z.string() }))
       .query(async ({ input, ctx }) => {
@@ -289,20 +250,17 @@ auth: router({
         };
       }),
 
-    // Get user's progress for a specific quest
     get: protectedProcedure
       .input(z.object({ questId: z.string() }))
       .query(async ({ input, ctx }) => {
         return await getUserProgress(ctx.user.id, input.questId);
       }),
 
-    // Get all progress for current user
     myProgress: protectedProcedure
       .query(async ({ ctx }) => {
         return await getAllUserProgress(ctx.user.id);
       }),
 
-    // Update progress for a quest
     update: protectedProcedure
       .input(z.object({
         questId: z.string(),
@@ -325,7 +283,6 @@ auth: router({
           videoWatched: input.videoWatched ? 1 : 0,
         });
 
-        // If quest is completed, create notification and check for achievements
         if (input.completed) {
           await createNotification({
             userId: ctx.user.id,
@@ -355,7 +312,7 @@ auth: router({
                 });
               }
             } catch (e) {
-              // Achievement might not exist yet, ignore
+              // Achievement might not exist yet
             }
           }
         }
@@ -363,16 +320,13 @@ auth: router({
         return result;
       }),
 
-    // Get user's rank
     myRank: protectedProcedure
       .query(async ({ ctx }) => {
         return await getUserRank(ctx.user.id);
       }),
   }),
 
-  // Leaderboard API
   leaderboard: router({
-    // Get top users
     top: publicProcedure
       .input(z.object({ limit: z.number().min(1).max(100).optional() }))
       .query(async ({ input }) => {
@@ -380,21 +334,17 @@ auth: router({
       }),
   }),
 
-  // Achievements API
   achievements: router({
-    // Get all available achievements
     list: publicProcedure
       .query(async () => {
         return await getAllAchievements();
       }),
 
-    // Get user's earned achievements
     myAchievements: protectedProcedure
       .query(async ({ ctx }) => {
         return await getUserAchievements(ctx.user.id);
       }),
 
-    // Admin: Create a new achievement
     create: adminProcedure
       .input(z.object({
         code: z.string().min(1).max(64),
@@ -420,38 +370,31 @@ auth: router({
       }),
   }),
 
-  // Notifications API
   notifications: router({
-    // Get user's notifications
     list: protectedProcedure
       .input(z.object({ unreadOnly: z.boolean().optional() }))
       .query(async ({ input, ctx }) => {
         return await getUserNotifications(ctx.user.id, input.unreadOnly);
       }),
 
-    // Get unread count
     unreadCount: protectedProcedure
       .query(async ({ ctx }) => {
         return await getUnreadNotificationCount(ctx.user.id);
       }),
 
-    // Mark notification as read
     markRead: protectedProcedure
       .input(z.object({ notificationId: z.number() }))
       .mutation(async ({ input, ctx }) => {
         return await markNotificationRead(input.notificationId, ctx.user.id);
       }),
 
-    // Mark all as read
     markAllRead: protectedProcedure
       .mutation(async ({ ctx }) => {
         return await markAllNotificationsRead(ctx.user.id);
       }),
   }),
 
-  // Daily Check-in API
   checkIn: router({
-    // Check if user has checked in today
     status: protectedProcedure
       .query(async ({ ctx }) => {
         const checkedIn = await hasCheckedInToday(ctx.user.id);
@@ -459,12 +402,9 @@ auth: router({
         return { checkedInToday: checkedIn, currentStreak: streak };
       }),
 
-    // Perform daily check-in
     perform: protectedProcedure
       .mutation(async ({ ctx }) => {
         const result = await performCheckIn(ctx.user.id);
-        
-        // Create notification for successful check-in
         if (result.success) {
           await createNotification({
             userId: ctx.user.id,
@@ -476,7 +416,6 @@ auth: router({
             relatedId: 'checkin',
           });
 
-          // Check for streak achievements
           if (result.streakCount === 7) {
             try {
               const achResult = await awardAchievement(ctx.user.id, 'week_streak');
@@ -496,27 +435,22 @@ auth: router({
             }
           }
         }
-
         return result;
       }),
 
-    // Get check-in history
     history: protectedProcedure
       .input(z.object({ days: z.number().min(7).max(365).optional() }))
       .query(async ({ input, ctx }) => {
         return await getCheckInHistory(ctx.user.id, input.days || 30);
       }),
 
-    // Get check-in stats
     stats: protectedProcedure
       .query(async ({ ctx }) => {
         return await getCheckInStats(ctx.user.id);
       }),
   }),
 
-  // Community Posts API
   community: router({
-    // Get community posts
     list: publicProcedure
       .input(z.object({
         limit: z.number().min(1).max(50).optional(),
@@ -531,14 +465,12 @@ auth: router({
         });
       }),
 
-    // Get single post
     get: publicProcedure
       .input(z.object({ postId: z.number() }))
       .query(async ({ input }) => {
         return await getPostById(input.postId);
       }),
 
-    // Create a new post
     create: protectedProcedure
       .input(z.object({
         content: z.string().min(1).max(2000),
@@ -556,28 +488,24 @@ auth: router({
         });
       }),
 
-    // Toggle like on a post
     toggleLike: protectedProcedure
       .input(z.object({ postId: z.number() }))
       .mutation(async ({ input, ctx }) => {
         return await togglePostLike(input.postId, ctx.user.id);
       }),
 
-    // Check if user liked a post
     hasLiked: protectedProcedure
       .input(z.object({ postId: z.number() }))
       .query(async ({ input, ctx }) => {
         return await hasUserLikedPost(input.postId, ctx.user.id);
       }),
 
-    // Get comments for a post
     comments: publicProcedure
       .input(z.object({ postId: z.number() }))
       .query(async ({ input }) => {
         return await getPostComments(input.postId);
       }),
 
-    // Add comment to a post
     addComment: protectedProcedure
       .input(z.object({
         postId: z.number(),
@@ -591,28 +519,19 @@ auth: router({
         });
       }),
 
-    // Delete a post
     delete: protectedProcedure
       .input(z.object({ postId: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        const isAdmin = ctx.user.role === 'admin';
-        return await deleteCommunityPost(input.postId, ctx.user.id, isAdmin);
+        return await deleteCommunityPost(input.postId, ctx.user.id, ctx.user.role === 'admin');
       }),
   }),
 
-  // Practice Reminders API
   reminder: router({
-    // Get user's reminder settings
     get: protectedProcedure
       .query(async ({ ctx }) => {
         const reminder = await getPracticeReminder(ctx.user.id);
         if (!reminder) {
-          return {
-            enabled: true,
-            reminderTime: '19:00',
-            daysOfWeek: '0,1,2,3,4,5,6',
-            timezoneOffset: 480,
-          };
+          return { enabled: true, reminderTime: '19:00', daysOfWeek: '0,1,2,3,4,5,6', timezoneOffset: 480 };
         }
         return {
           enabled: reminder.enabled === 1,
@@ -622,7 +541,6 @@ auth: router({
         };
       }),
 
-    // Update reminder settings
     update: protectedProcedure
       .input(z.object({
         enabled: z.boolean().optional(),
@@ -641,28 +559,23 @@ auth: router({
       }),
   }),
 
-  // Challenges API
   challenges: router({
-    // Get active challenges
     active: publicProcedure
       .query(async () => {
         return await getActiveChallenges();
       }),
 
-    // Get all challenges (admin)
     all: adminProcedure
       .query(async () => {
         return await getAllChallenges();
       }),
 
-    // Get single challenge
     get: publicProcedure
       .input(z.object({ challengeId: z.number() }))
       .query(async ({ input }) => {
         return await getChallengeById(input.challengeId);
       }),
 
-    // Create a challenge (admin only)
     create: adminProcedure
       .input(z.object({
         titleZh: z.string().min(1).max(256),
@@ -691,29 +604,25 @@ auth: router({
         });
       }),
 
-    // Join a challenge
     join: protectedProcedure
       .input(z.object({ challengeId: z.number() }))
       .mutation(async ({ input, ctx }) => {
         return await joinChallenge(input.challengeId, ctx.user.id);
       }),
 
-    // Get user's participation in a challenge
     participation: protectedProcedure
       .input(z.object({ challengeId: z.number() }))
       .query(async ({ input, ctx }) => {
         return await getChallengeParticipation(input.challengeId, ctx.user.id);
       }),
 
-    // Get all challenges user has joined
     myChallenges: protectedProcedure
       .query(async ({ ctx }) => {
         return await getUserChallenges(ctx.user.id);
       }),
 
-    // Get challenge leaderboard
     leaderboard: publicProcedure
-      .input(z.object({ 
+      .input(z.object({
         challengeId: z.number(),
         limit: z.number().min(1).max(50).optional(),
       }))
@@ -721,7 +630,6 @@ auth: router({
         return await getChallengeLeaderboard(input.challengeId, input.limit || 10);
       }),
 
-    // Delete a challenge (admin only)
     delete: adminProcedure
       .input(z.object({ challengeId: z.number() }))
       .mutation(async ({ input }) => {
@@ -729,15 +637,12 @@ auth: router({
       }),
   }),
 
-  // Learning Path API
   learningPath: router({
-    // Get user's skill progress
     myProgress: protectedProcedure
       .query(async ({ ctx }) => {
         return await getUserSkillProgress(ctx.user.id);
       }),
 
-    // Update skill progress
     updateProgress: protectedProcedure
       .input(z.object({
         skillId: z.string(),
@@ -753,20 +658,17 @@ auth: router({
         });
       }),
 
-    // Get skill prerequisites
     prerequisites: publicProcedure
       .input(z.object({ skillId: z.string() }))
       .query(async ({ input }) => {
         return await getSkillPrerequisites(input.skillId);
       }),
 
-    // Get all prerequisites (for skill tree)
     allPrerequisites: publicProcedure
       .query(async () => {
         return await getAllSkillPrerequisites();
       }),
 
-    // Add prerequisite (admin only)
     addPrerequisite: adminProcedure
       .input(z.object({
         skillId: z.string(),
@@ -778,16 +680,13 @@ auth: router({
       }),
   }),
 
-  // Booking API
   booking: router({
-    // Get available slots
     availableSlots: publicProcedure
       .input(z.object({ instructorId: z.number().optional() }).optional())
       .query(async ({ input }) => {
         return await getAvailableBookingSlots(input?.instructorId);
       }),
 
-    // Create a booking slot (instructor only)
     createSlot: adminProcedure
       .input(z.object({
         startTime: z.string(),
@@ -809,13 +708,11 @@ auth: router({
         });
       }),
 
-    // Get instructor's slots
     mySlots: adminProcedure
       .query(async ({ ctx }) => {
         return await getInstructorBookingSlots(ctx.user.id);
       }),
 
-    // Update a slot
     updateSlot: adminProcedure
       .input(z.object({
         slotId: z.number(),
@@ -833,14 +730,12 @@ auth: router({
         });
       }),
 
-    // Delete a slot
     deleteSlot: adminProcedure
       .input(z.object({ slotId: z.number() }))
       .mutation(async ({ input }) => {
         return await deleteBookingSlot(input.slotId);
       }),
 
-    // Book an appointment
     book: protectedProcedure
       .input(z.object({
         slotId: z.number(),
@@ -848,12 +743,9 @@ auth: router({
         studentNotes: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // Get the slot to find the instructor
         const slots = await getAvailableBookingSlots();
         const slot = slots.find(s => s.id === input.slotId);
-        if (!slot) {
-          throw new Error("Slot not found or not available");
-        }
+        if (!slot) throw new Error("Slot not found or not available");
         return await createAppointment({
           slotId: input.slotId,
           studentId: ctx.user.id,
@@ -863,19 +755,16 @@ auth: router({
         });
       }),
 
-    // Get student's appointments
     myAppointments: protectedProcedure
       .query(async ({ ctx }) => {
         return await getStudentAppointments(ctx.user.id);
       }),
 
-    // Get instructor's appointments
     instructorAppointments: adminProcedure
       .query(async ({ ctx }) => {
         return await getInstructorAppointments(ctx.user.id);
       }),
 
-    // Update appointment status (instructor)
     updateStatus: adminProcedure
       .input(z.object({
         appointmentId: z.number(),
@@ -886,7 +775,6 @@ auth: router({
         return await updateAppointmentStatus(input.appointmentId, input.status, input.notes);
       }),
 
-    // Rate an appointment (student)
     rate: protectedProcedure
       .input(z.object({
         appointmentId: z.number(),
@@ -897,7 +785,6 @@ auth: router({
         return await rateAppointment(input.appointmentId, input.rating, input.feedback);
       }),
 
-    // Get appointment details
     getAppointment: protectedProcedure
       .input(z.object({ appointmentId: z.number() }))
       .query(async ({ input }) => {
