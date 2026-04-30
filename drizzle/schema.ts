@@ -2,7 +2,6 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-or
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
-  /** 自訂 ID，取代 Manus openId，格式為 user_xxxxxxxx */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -14,6 +13,17 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
+
+export const activationCodes = mysqlTable("activationCodes", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 64 }).notNull().unique(),
+  usedBy: int("usedBy"),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+ 
+export type ActivationCode = typeof activationCodes.$inferSelect;
+export type InsertActivationCode = typeof activationCodes.$inferInsert;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
