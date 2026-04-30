@@ -49,8 +49,8 @@ const questData: Record<string, QuestData> = {
     duration: 15,
     difficulty: 'easy',
     steps: [
-      { id: 1, titleKey: 'quest.1-1.step1', descKey: 'quest.1-1.step1.desc', completed: true },
-      { id: 2, titleKey: 'quest.1-1.step2', descKey: 'quest.1-1.step2.desc', completed: true },
+      { id: 1, titleKey: 'quest.1-1.step1', descKey: 'quest.1-1.step1.desc', completed: false },
+      { id: 2, titleKey: 'quest.1-1.step2', descKey: 'quest.1-1.step2.desc', completed: false },
       { id: 3, titleKey: 'quest.1-1.step3', descKey: 'quest.1-1.step3.desc', completed: false },
       { id: 4, titleKey: 'quest.1-1.step4', descKey: 'quest.1-1.step4.desc', completed: false },
     ],
@@ -63,8 +63,8 @@ const questData: Record<string, QuestData> = {
     duration: 20,
     difficulty: 'easy',
     steps: [
-      { id: 1, titleKey: 'quest.1-2.step1', descKey: 'quest.1-2.step1.desc', completed: true },
-      { id: 2, titleKey: 'quest.1-2.step2', descKey: 'quest.1-2.step2.desc', completed: true },
+      { id: 1, titleKey: 'quest.1-2.step1', descKey: 'quest.1-2.step1.desc', completed: false },
+      { id: 2, titleKey: 'quest.1-2.step2', descKey: 'quest.1-2.step2.desc', completed: false },
       { id: 3, titleKey: 'quest.1-2.step3', descKey: 'quest.1-2.step3.desc', completed: false },
       { id: 4, titleKey: 'quest.1-2.step4', descKey: 'quest.1-2.step4.desc', completed: false },
     ],
