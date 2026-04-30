@@ -11,13 +11,12 @@ import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Navigation from '@/components/Navigation';
 import { Progress } from '@/components/ui/progress';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Metronome from '@/components/Metronome';
 import AudioRecorder from '@/components/AudioRecorder';
 import CommentSection from '@/components/CommentSection';
-import VideoSubmission from '@/components/VideoSubmission';
 import AchievementCelebration from '@/components/AchievementCelebration';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -41,6 +40,7 @@ interface QuestData {
 }
 
 // Quest data with translation keys
+// videoUrl 格式：https://www.youtube.com/embed/影片ID
 const questData: Record<string, QuestData> = {
   '1-1': {
     titleKey: 'quest.1-1.title',
@@ -93,9 +93,14 @@ export default function QuestDetail() {
   const { isAuthenticated } = useAuth();
   const questId = id || '1-1';
   const quest = questData[questId];
-  const [steps, setSteps] = useState<QuestStep[]>(quest?.steps || []);
+
+  // 步驟狀態：預設全部 false，等資料庫載入後再更新
+  const [steps, setSteps] = useState<QuestStep[]>(
+    quest?.steps.map(s => ({ ...s, completed: false })) || []
+  );
   const [activeTab, setActiveTab] = useState<string>('video');
   const [videoWatched, setVideoWatched] = useState(false);
+  const [progressLoaded, setProgressLoaded] = useState(false);
   const [celebration, setCelebration] = useState<{
     type: 'achievement' | 'quest_complete' | 'level_up';
     titleZh: string;
@@ -106,14 +111,39 @@ export default function QuestDetail() {
   } | null>(null);
 
   const utils = trpc.useUtils();
+
+  // 從資料庫載入此 quest 的進度
+  const { data: savedProgress } = trpc.progress.getQuestProgress.useQuery(
+    { questId },
+    { enabled: isAuthenticated }
+  );
+
+  // 當資料庫進度載入後，恢復步驟打勾狀態
+  useEffect(() => {
+    if (savedProgress && !progressLoaded && quest) {
+      const savedStepIds: number[] = savedProgress.completedStepIds ?? [];
+      setSteps(
+        quest.steps.map(s => ({
+          ...s,
+          completed: savedStepIds.includes(s.id),
+        }))
+      );
+      if (savedProgress.videoWatched) {
+        setVideoWatched(true);
+      }
+      setProgressLoaded(true);
+    }
+  }, [savedProgress, progressLoaded, quest]);
+
   const updateProgressMutation = trpc.progress.update.useMutation({
     onSuccess: () => {
       utils.progress.myProgress.invalidate();
       utils.progress.myRank.invalidate();
+      utils.progress.getQuestProgress.invalidate({ questId });
       utils.notifications.unreadCount.invalidate();
     },
   });
-  
+
   if (!quest) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -131,26 +161,26 @@ export default function QuestDetail() {
   const progress = (completedSteps / steps.length) * 100;
 
   const toggleStep = (stepId: number) => {
-    const newSteps = steps.map(step => 
+    const newSteps = steps.map(step =>
       step.id === stepId ? { ...step, completed: !step.completed } : step
     );
     setSteps(newSteps);
-    
+
     const newCompletedSteps = newSteps.filter(s => s.completed).length;
     const newProgress = (newCompletedSteps / newSteps.length) * 100;
     const isCompleted = newProgress === 100;
-    const xpEarned = isCompleted ? 50 : 0;
+    const completedStepIds = newSteps.filter(s => s.completed).map(s => s.id);
 
-    // Update progress in database if authenticated
     if (isAuthenticated) {
       updateProgressMutation.mutate({
         questId,
         progress: Math.round(newProgress),
         completed: isCompleted,
         xpEarned: isCompleted ? 50 : undefined,
+        completedStepIds,
+        videoWatched,
       });
 
-      // Show celebration if quest completed
       if (isCompleted && newCompletedSteps > steps.filter(s => s.completed).length) {
         setCelebration({
           type: 'quest_complete',
@@ -162,12 +192,15 @@ export default function QuestDetail() {
         });
       }
     }
-    
+
     toast.success(language === 'zh' ? '進度已更新！' : 'Progress updated!');
   };
 
-  const handleUpload = () => {
-    toast.info(language === 'zh' ? '影片上傳功能即將推出！' : 'Video upload coming soon!');
+  const handleVideoWatched = () => {
+    setVideoWatched(true);
+    const firstUncompleted = steps.find(s => !s.completed);
+    if (firstUncompleted) toggleStep(firstUncompleted.id);
+    toast.success(language === 'zh' ? '✅ 教學影片已完成！' : '✅ Tutorial watched!');
   };
 
   const getDifficultyText = (diff: string) => {
@@ -177,7 +210,7 @@ export default function QuestDetail() {
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      
+
       <main className="lg:ml-20 pt-20 lg:pt-8 pb-20">
         <div className="container max-w-6xl">
           {/* Back Button */}
@@ -201,12 +234,10 @@ export default function QuestDetail() {
             className="magic-card p-6 mb-8"
           >
             <div className="flex flex-col md:flex-row md:items-start gap-6">
-              {/* Quest Icon */}
               <div className="w-20 h-20 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
                 <Target className="w-10 h-10 text-primary" />
               </div>
 
-              {/* Quest Info */}
               <div className="flex-1">
                 <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
                   {t(quest.titleKey)}
@@ -214,8 +245,6 @@ export default function QuestDetail() {
                 <p className="text-muted-foreground mb-4">
                   {t(quest.descKey)}
                 </p>
-
-                {/* Meta */}
                 <div className="flex flex-wrap gap-4 text-sm">
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="w-4 h-4" />
@@ -232,26 +261,11 @@ export default function QuestDetail() {
                 </div>
               </div>
 
-              {/* Progress Circle */}
               <div className="text-center shrink-0">
                 <div className="relative w-20 h-20">
                   <svg className="w-20 h-20 -rotate-90">
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="35"
-                      stroke="currentColor"
-                      strokeWidth="6"
-                      fill="none"
-                      className="text-secondary"
-                    />
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="35"
-                      stroke="currentColor"
-                      strokeWidth="6"
-                      fill="none"
+                    <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="6" fill="none" className="text-secondary" />
+                    <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="6" fill="none"
                       strokeDasharray={`${progress * 2.2} 220`}
                       className="text-primary transition-all duration-500"
                     />
@@ -270,7 +284,6 @@ export default function QuestDetail() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-8">
-              {/* Content Tabs */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -304,32 +317,27 @@ export default function QuestDetail() {
                         />
                       </div>
                       <div className="p-4 flex items-center justify-between">
-  <span className="text-sm text-muted-foreground flex items-center gap-2">
-    <Play className="w-4 h-4" />
-    {t('quest.video')}
-  </span>
-  {videoWatched ? (
-    <span className="flex items-center gap-2 text-green-400 text-sm font-medium">
-      <CheckCircle className="w-4 h-4" />
-      {language === 'zh' ? '已觀看完畢' : 'Watched'}
-    </span>
-  ) : (
-    <Button
-      variant="outline"
-      size="sm"
-      className="border-primary text-primary hover:bg-primary hover:text-black"
-      onClick={() => {
-        setVideoWatched(true);
-        const firstUncompleted = steps.find(s => !s.completed);
-        if (firstUncompleted) toggleStep(firstUncompleted.id);
-        toast.success(language === 'zh' ? '✅ 教學影片已完成！' : '✅ Tutorial watched!');
-      }}
-    >
-      <CheckCircle className="w-4 h-4 mr-2" />
-      {language === 'zh' ? '我看完了' : 'Mark as watched'}
-    </Button>
-  )}
-</div>
+                        <span className="text-sm text-muted-foreground flex items-center gap-2">
+                          <Play className="w-4 h-4" />
+                          {t('quest.video')}
+                        </span>
+                        {videoWatched ? (
+                          <span className="flex items-center gap-2 text-green-400 text-sm font-medium">
+                            <CheckCircle className="w-4 h-4" />
+                            {language === 'zh' ? '已觀看完畢' : 'Watched'}
+                          </span>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-primary text-primary hover:bg-primary hover:text-black"
+                            onClick={handleVideoWatched}
+                          >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            {language === 'zh' ? '我看完了' : 'Mark as watched'}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </TabsContent>
 
@@ -354,7 +362,7 @@ export default function QuestDetail() {
                   <Target className="w-5 h-5 text-primary" />
                   {t('quest.steps')}
                 </h2>
-                
+
                 <div className="space-y-4">
                   {steps.map((step, index) => (
                     <motion.div
@@ -365,16 +373,16 @@ export default function QuestDetail() {
                       onClick={() => toggleStep(step.id)}
                       className={`
                         flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-all
-                        ${step.completed 
-                          ? 'bg-green-500/10 border border-green-500/30' 
+                        ${step.completed
+                          ? 'bg-green-500/10 border border-green-500/30'
                           : 'bg-secondary/50 hover:bg-secondary'
                         }
                       `}
                     >
                       <div className={`
                         w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all
-                        ${step.completed 
-                          ? 'bg-green-500 text-white' 
+                        ${step.completed
+                          ? 'bg-green-500 text-white'
                           : 'bg-muted text-muted-foreground'
                         }
                       `}>
@@ -396,7 +404,6 @@ export default function QuestDetail() {
                   ))}
                 </div>
 
-                {/* Progress Bar */}
                 <div className="mt-6">
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-muted-foreground">{t('quest.totalProgress')}</span>
@@ -430,7 +437,7 @@ export default function QuestDetail() {
                 </ul>
               </motion.div>
 
-              {/* Upload */}
+              {/* Upload - 即將推出 */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -442,31 +449,19 @@ export default function QuestDetail() {
                   {t('quest.uploadSection')}
                 </h2>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {t('quest.uploadDescription')}
+                  {language === 'zh' ? '影片上傳功能即將推出，敬請期待！' : 'Video upload coming soon!'}
                 </p>
-                <Button onClick={handleUpload} className="w-full bg-primary hover:bg-primary/90">
+                <Button disabled className="w-full opacity-50 cursor-not-allowed">
                   <Upload className="w-4 h-4 mr-2" />
-                  {t('action.upload')}
+                  {language === 'zh' ? '即將推出' : 'Coming Soon'}
                 </Button>
-              </motion.div>
-
-              {/* Comment Section */}
-              {/* Video Submission */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="lg:col-span-2"
-              >
-                <VideoSubmission questId={questId} />
               </motion.div>
 
               {/* Comments Section */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="lg:col-span-2"
+                transition={{ delay: 0.5 }}
               >
                 <CommentSection questId={questId} />
               </motion.div>
@@ -495,7 +490,6 @@ export default function QuestDetail() {
         </div>
       </main>
 
-      {/* Achievement Celebration Modal */}
       <AchievementCelebration
         celebration={celebration}
         onClose={() => setCelebration(null)}
