@@ -70,6 +70,8 @@ export const userProgress = mysqlTable("userProgress", {
   completed: int("completed").default(0).notNull(),
   xpEarned: int("xpEarned").default(0).notNull(),
   completedAt: timestamp("completedAt"),
+  completedStepIds: text("completedStepIds"),
+  videoWatched: int("videoWatched").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
