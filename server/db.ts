@@ -1,7 +1,7 @@
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
-  InsertUser, users, comments, commentLikes, InsertComment, 
+  InsertUser, users, comments, commentLikes, activationCodes, InsertComment, 
   videoSubmissions, InsertVideoSubmission,
   userProgress, InsertUserProgress,
   achievements, InsertAchievement,
