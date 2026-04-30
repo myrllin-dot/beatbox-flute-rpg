@@ -231,6 +231,21 @@ export const appRouter = router({
 
   // User Progress API
   progress: router({
+    // Get user's progress for a specific quest (包含步驟打勾狀態)
+    getQuestProgress: protectedProcedure
+      .input(z.object({ questId: z.string() }))
+      .query(async ({ input, ctx }) => {
+        const progress = await getUserProgress(ctx.user.id, input.questId);
+        if (!progress) return null;
+        return {
+          ...progress,
+          completedStepIds: progress.completedStepIds
+            ? JSON.parse(progress.completedStepIds as string)
+            : [],
+          videoWatched: progress.videoWatched === 1,
+        };
+      }),
+
     // Get user's progress for a specific quest
     get: protectedProcedure
       .input(z.object({ questId: z.string() }))
@@ -251,6 +266,8 @@ export const appRouter = router({
         progress: z.number().min(0).max(100),
         completed: z.boolean().optional(),
         xpEarned: z.number().optional(),
+        completedStepIds: z.array(z.number()).optional(),
+        videoWatched: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const result = await updateUserProgress({
@@ -259,6 +276,10 @@ export const appRouter = router({
           progress: input.progress,
           completed: input.completed,
           xpEarned: input.xpEarned,
+          completedStepIds: input.completedStepIds
+            ? JSON.stringify(input.completedStepIds)
+            : undefined,
+          videoWatched: input.videoWatched ? 1 : 0,
         });
 
         // If quest is completed, create notification and check for achievements
@@ -273,10 +294,9 @@ export const appRouter = router({
             relatedId: input.questId,
           });
 
-          // Check for first quest achievement
           const allProgress = await getAllUserProgress(ctx.user.id);
           const completedCount = allProgress.filter(p => p.completed === 1).length;
-          
+
           if (completedCount === 1) {
             try {
               const achResult = await awardAchievement(ctx.user.id, 'first_quest');
