@@ -45,7 +45,7 @@ const questData: Record<string, QuestData> = {
   '1-1': {
     titleKey: 'quest.1-1.title',
     descKey: 'quest.1-1.description',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    videoUrl: 'https://www.youtube.com/embed/SsEbqkEE92A',
     duration: 15,
     difficulty: 'easy',
     steps: [
@@ -59,7 +59,7 @@ const questData: Record<string, QuestData> = {
   '1-2': {
     titleKey: 'quest.1-2.title',
     descKey: 'quest.1-2.description',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    videoUrl: 'https://www.youtube.com/embed/jfluG7Xj3KI',
     duration: 20,
     difficulty: 'easy',
     steps: [
@@ -95,6 +95,7 @@ export default function QuestDetail() {
   const quest = questData[questId];
   const [steps, setSteps] = useState<QuestStep[]>(quest?.steps || []);
   const [activeTab, setActiveTab] = useState<string>('video');
+  const [videoWatched, setVideoWatched] = useState(false);
   const [celebration, setCelebration] = useState<{
     type: 'achievement' | 'quest_complete' | 'level_up';
     titleZh: string;
@@ -303,14 +304,32 @@ export default function QuestDetail() {
                         />
                       </div>
                       <div className="p-4 flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground flex items-center gap-2">
-                          <Play className="w-4 h-4" />
-                          {t('quest.video')}
-                        </span>
-                        <Button variant="outline" size="sm">
-                          {t('quest.fullscreen')}
-                        </Button>
-                      </div>
+  <span className="text-sm text-muted-foreground flex items-center gap-2">
+    <Play className="w-4 h-4" />
+    {t('quest.video')}
+  </span>
+  {videoWatched ? (
+    <span className="flex items-center gap-2 text-green-400 text-sm font-medium">
+      <CheckCircle className="w-4 h-4" />
+      {language === 'zh' ? '已觀看完畢' : 'Watched'}
+    </span>
+  ) : (
+    <Button
+      variant="outline"
+      size="sm"
+      className="border-primary text-primary hover:bg-primary hover:text-black"
+      onClick={() => {
+        setVideoWatched(true);
+        const firstUncompleted = steps.find(s => !s.completed);
+        if (firstUncompleted) toggleStep(firstUncompleted.id);
+        toast.success(language === 'zh' ? '✅ 教學影片已完成！' : '✅ Tutorial watched!');
+      }}
+    >
+      <CheckCircle className="w-4 h-4 mr-2" />
+      {language === 'zh' ? '我看完了' : 'Mark as watched'}
+    </Button>
+  )}
+</div>
                     </div>
                   </TabsContent>
 
