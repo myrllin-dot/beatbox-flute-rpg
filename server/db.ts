@@ -503,6 +503,8 @@ export async function updateUserProgress(data: {
   progress: number;
   completed?: boolean;
   xpEarned?: number;
+  completedStepIds?: string | null;
+  videoWatched?: number;
 }) {
   const db = await getDb();
   if (!db) {
