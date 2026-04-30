@@ -3,6 +3,10 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import { activationCodes } from "./db";
+import { users } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
+import { getDb } from "./db";
 import {
   getCommentsByQuestId,
   createComment,
@@ -86,15 +90,54 @@ import { nanoid } from "nanoid";
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
-  auth: router({
+auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+ 
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
+ 
+    activateCode: protectedProcedure
+      .input(z.object({ code: z.string().min(1).max(64) }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+ 
+        // 檢查序號是否存在且未使用
+        const [codeRecord] = await db
+          .select()
+          .from(activationCodes)
+          .where(eq(activationCodes.code, input.code.toUpperCase()))
+          .limit(1);
+ 
+        if (!codeRecord) {
+          throw new Error("序號不存在或已無效");
+        }
+ 
+        if (codeRecord.usedBy !== null) {
+          // 如果是自己已用過
+          if (codeRecord.usedBy === ctx.user.id) {
+            throw new Error("此序號已被使用過");
+          }
+          throw new Error("此序號已被其他用戶使用");
+        }
+ 
+        // 啟用序號，升級用戶為 pro
+        await db
+          .update(activationCodes)
+          .set({ usedBy: ctx.user.id, usedAt: new Date() })
+          .where(eq(activationCodes.code, input.code.toUpperCase()));
+ 
+        await db
+          .update(users)
+          .set({ tier: 'pro', activationCode: input.code.toUpperCase() } as any)
+          .where(eq(users.id, ctx.user.id));
+ 
+        return { success: true, tier: 'pro' };
+      }),
+  }),
   }),
 
   // Comments API for quest discussions
