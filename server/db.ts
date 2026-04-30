@@ -512,24 +512,28 @@ export async function updateUserProgress(data: {
   const existing = await getUserProgress(data.userId, data.questId);
 
   if (existing) {
-    await db.update(userProgress)
-      .set({
-        progress: data.progress,
-        completed: data.completed ? 1 : existing.completed,
-        xpEarned: data.xpEarned ?? existing.xpEarned,
-        completedAt: data.completed ? new Date() : existing.completedAt,
-      })
+   await db.update(userProgress)
+  .set({
+    progress: data.progress,
+    completed: data.completed ? 1 : existing.completed,
+    xpEarned: data.xpEarned ?? existing.xpEarned,
+    completedAt: data.completed ? new Date() : existing.completedAt,
+    completedStepIds: data.completedStepIds ?? existing.completedStepIds,
+    videoWatched: data.videoWatched ?? existing.videoWatched,
+  })
       .where(eq(userProgress.id, existing.id));
     return { id: existing.id, isNew: false };
   } else {
     const result = await db.insert(userProgress).values({
-      userId: data.userId,
-      questId: data.questId,
-      progress: data.progress,
-      completed: data.completed ? 1 : 0,
-      xpEarned: data.xpEarned ?? 0,
-      completedAt: data.completed ? new Date() : null,
-    });
+  userId: data.userId,
+  questId: data.questId,
+  progress: data.progress,
+  completed: data.completed ? 1 : 0,
+  xpEarned: data.xpEarned ?? 0,
+  completedAt: data.completed ? new Date() : null,
+  completedStepIds: data.completedStepIds ?? null,
+  videoWatched: data.videoWatched ?? 0,
+});
     return { id: Number(result[0].insertId), isNew: true };
   }
 }
