@@ -1,12 +1,15 @@
 /**
  * Quest Detail Page
- * Design: Arcane Academy - Immersive quest experience with video player
- * Features: Video tutorial, step-by-step guide, progress tracking, metronome, recorder
+ * 整合新的 quest 資料結構，支援免費版/正式版
+ * 包含：影片、步驟、留言（正式版）、YouTube 分享（正式版）
  */
 
-import { Link, useParams } from 'wouter';
+import { Link, useParams, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Play, CheckCircle, Clock, Music, Target, Award, Upload, MessageCircle, Wrench } from 'lucide-react';
+import {
+  ArrowLeft, Play, CheckCircle, Clock, Target, Award,
+  MessageCircle, Wrench, Music, Lock, ExternalLink, Youtube
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Navigation from '@/components/Navigation';
@@ -20,117 +23,48 @@ import CommentSection from '@/components/CommentSection';
 import AchievementCelebration from '@/components/AchievementCelebration';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
-
-interface QuestStep {
-  id: number;
-  titleKey: string;
-  descKey: string;
-  completed: boolean;
-}
-
-interface QuestData {
-  titleKey: string;
-  descKey: string;
-  videoUrl: string;
-  duration: number;
-  difficulty: 'easy' | 'medium' | 'hard';
-  steps: QuestStep[];
-  tipKeys: string[];
-  showMetronome?: boolean;
-}
-
-// Quest data with translation keys
-// videoUrl 格式：https://www.youtube.com/embed/影片ID
-const questData: Record<string, QuestData> = {
-  '1-1': {
-    titleKey: 'quest.1-1.title',
-    descKey: 'quest.1-1.description',
-    videoUrl: 'https://www.youtube.com/embed/SsEbqkEE92A',
-    duration: 15,
-    difficulty: 'easy',
-    steps: [
-      { id: 1, titleKey: 'quest.1-1.step1', descKey: 'quest.1-1.step1.desc', completed: false },
-      { id: 2, titleKey: 'quest.1-1.step2', descKey: 'quest.1-1.step2.desc', completed: false },
-      { id: 3, titleKey: 'quest.1-1.step3', descKey: 'quest.1-1.step3.desc', completed: false },
-      { id: 4, titleKey: 'quest.1-1.step4', descKey: 'quest.1-1.step4.desc', completed: false },
-    ],
-    tipKeys: ['quest.1-1.tip1', 'quest.1-1.tip2', 'quest.1-1.tip3', 'quest.1-1.tip4'],
-  },
-  '1-2': {
-    titleKey: 'quest.1-2.title',
-    descKey: 'quest.1-2.description',
-    videoUrl: 'https://www.youtube.com/embed/jfluG7Xj3KI',
-    duration: 20,
-    difficulty: 'easy',
-    steps: [
-      { id: 1, titleKey: 'quest.1-2.step1', descKey: 'quest.1-2.step1.desc', completed: false },
-      { id: 2, titleKey: 'quest.1-2.step2', descKey: 'quest.1-2.step2.desc', completed: false },
-      { id: 3, titleKey: 'quest.1-2.step3', descKey: 'quest.1-2.step3.desc', completed: false },
-      { id: 4, titleKey: 'quest.1-2.step4', descKey: 'quest.1-2.step4.desc', completed: false },
-    ],
-    tipKeys: ['quest.1-2.tip1', 'quest.1-2.tip2', 'quest.1-2.tip3'],
-  },
-  '1-3': {
-    titleKey: 'quest.1-3.title',
-    descKey: 'quest.1-3.description',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    duration: 25,
-    difficulty: 'medium',
-    steps: [
-      { id: 1, titleKey: 'quest.1-3.step1', descKey: 'quest.1-3.step1.desc', completed: false },
-      { id: 2, titleKey: 'quest.1-3.step2', descKey: 'quest.1-3.step2.desc', completed: false },
-      { id: 3, titleKey: 'quest.1-3.step3', descKey: 'quest.1-3.step3.desc', completed: false },
-      { id: 4, titleKey: 'quest.1-3.step4', descKey: 'quest.1-3.step4.desc', completed: false },
-    ],
-    tipKeys: ['quest.1-3.tip1', 'quest.1-3.tip2', 'quest.1-3.tip3'],
-    showMetronome: true,
-  },
-};
+import { getQuestById, DIFFICULTY_CONFIG } from '@/data/quests';
 
 export default function QuestDetail() {
   const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
   const { t, language } = useLanguage();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const zh = language === 'zh';
   const questId = id || '1-1';
-  const quest = questData[questId];
+  const quest = getQuestById(questId);
 
-  // 步驟狀態：預設全部 false，等資料庫載入後再更新
-  const [steps, setSteps] = useState<QuestStep[]>(
+  const { data: me } = trpc.auth.me.useQuery();
+  const userTier: 'free' | 'pro' = (me as any)?.tier === 'pro' ? 'pro' : 'free';
+  const canInteract = userTier === 'pro';
+
+  const [steps, setSteps] = useState(
     quest?.steps.map(s => ({ ...s, completed: false })) || []
   );
   const [activeTab, setActiveTab] = useState<string>('video');
   const [videoWatched, setVideoWatched] = useState(false);
   const [progressLoaded, setProgressLoaded] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [showYoutubeInput, setShowYoutubeInput] = useState(false);
   const [celebration, setCelebration] = useState<{
     type: 'achievement' | 'quest_complete' | 'level_up';
-    titleZh: string;
-    titleEn: string;
-    messageZh?: string;
-    messageEn?: string;
+    titleZh: string; titleEn: string;
+    messageZh?: string; messageEn?: string;
     xpEarned?: number;
   } | null>(null);
 
   const utils = trpc.useUtils();
 
-  // 從資料庫載入此 quest 的進度
   const { data: savedProgress } = trpc.progress.getQuestProgress.useQuery(
     { questId },
     { enabled: isAuthenticated }
   );
 
-  // 當資料庫進度載入後，恢復步驟打勾狀態
   useEffect(() => {
     if (savedProgress && !progressLoaded && quest) {
       const savedStepIds: number[] = savedProgress.completedStepIds ?? [];
-      setSteps(
-        quest.steps.map(s => ({
-          ...s,
-          completed: savedStepIds.includes(s.id),
-        }))
-      );
-      if (savedProgress.videoWatched) {
-        setVideoWatched(true);
-      }
+      setSteps(quest.steps.map(s => ({ ...s, completed: savedStepIds.includes(s.id) })));
+      if (savedProgress.videoWatched) setVideoWatched(true);
       setProgressLoaded(true);
     }
   }, [savedProgress, progressLoaded, quest]);
@@ -146,28 +80,90 @@ export default function QuestDetail() {
 
   if (!quest) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="font-display text-2xl text-foreground mb-4">{t('quest.notFound')}</h1>
-          <Link href="/quests">
-            <Button>{t('quest.backToList')}</Button>
-          </Link>
+          <p className="text-2xl mb-4">😕</p>
+          <h1 className="text-xl text-white mb-4">{zh ? '找不到任務' : 'Quest not found'}</h1>
+          <Link href="/quests"><Button>{zh ? '回到任務地圖' : 'Back to Quest Map'}</Button></Link>
         </div>
       </div>
     );
   }
 
+  // 正式版任務需要 pro 才能進入
+  if (quest.tier === 'pro' && userTier === 'free') {
+    return (
+      <div className="min-h-screen bg-gray-950">
+        <Navigation />
+        <main className="lg:ml-20 pt-20 lg:pt-8 pb-24 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="max-w-sm mx-auto px-4 text-center"
+          >
+            <Lock className="w-16 h-16 text-yellow-500/50 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-2">
+              {zh ? '正式版限定內容' : 'Pro Exclusive Content'}
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              {zh
+                ? '此任務需要正式版序號解鎖。購買課程後輸入序號即可開啟全部內容。'
+                : 'This quest requires a Pro activation code. Purchase the course and enter your code to unlock all content.'
+              }
+            </p>
+            <div className="space-y-3">
+              <Button
+                className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold"
+                onClick={() => window.open('https://fluteonline.myrflute.com/courses/beatbox-flute-tutorial', '_blank')}
+              >
+                {zh ? '購買正式版課程' : 'Purchase Pro Course'}
+              </Button>
+              <Link href="/quests">
+                <Button variant="outline" className="w-full border-gray-700 text-gray-300">
+                  {zh ? '回到任務地圖' : 'Back to Quest Map'}
+                </Button>
+              </Link>
+            </div>
+          </motion.div>
+        </main>
+      </div>
+    );
+  }
+
+  if (quest.comingSoon) {
+    return (
+      <div className="min-h-screen bg-gray-950">
+        <Navigation />
+        <main className="lg:ml-20 pt-20 lg:pt-8 pb-24 flex items-center justify-center">
+          <div className="text-center px-4">
+            <div className="text-5xl mb-4">🚧</div>
+            <h2 className="text-xl font-bold text-white mb-2">
+              {zh ? '製作中，敬請期待！' : 'Coming Soon!'}
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              {zh ? '此任務正在製作中，上線後將立即通知你。' : 'This quest is being created. You\'ll be notified when it\'s ready.'}
+            </p>
+            <Link href="/quests">
+              <Button variant="outline" className="border-gray-700 text-gray-300">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                {zh ? '回到任務地圖' : 'Back to Quest Map'}
+              </Button>
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const completedSteps = steps.filter(s => s.completed).length;
-  const progress = (completedSteps / steps.length) * 100;
+  const progress = steps.length > 0 ? (completedSteps / steps.length) * 100 : 0;
+  const diff = DIFFICULTY_CONFIG[quest.difficulty];
 
   const toggleStep = (stepId: number) => {
-    const newSteps = steps.map(step =>
-      step.id === stepId ? { ...step, completed: !step.completed } : step
-    );
+    const newSteps = steps.map(s => s.id === stepId ? { ...s, completed: !s.completed } : s);
     setSteps(newSteps);
-
-    const newCompletedSteps = newSteps.filter(s => s.completed).length;
-    const newProgress = (newCompletedSteps / newSteps.length) * 100;
+    const newCompleted = newSteps.filter(s => s.completed).length;
+    const newProgress = steps.length > 0 ? (newCompleted / steps.length) * 100 : 0;
     const isCompleted = newProgress === 100;
     const completedStepIds = newSteps.filter(s => s.completed).map(s => s.id);
 
@@ -176,176 +172,179 @@ export default function QuestDetail() {
         questId,
         progress: Math.round(newProgress),
         completed: isCompleted,
-        xpEarned: isCompleted ? 50 : undefined,
+        xpEarned: isCompleted ? quest.xpReward : undefined,
         completedStepIds,
         videoWatched,
       });
-
-      if (isCompleted && newCompletedSteps > steps.filter(s => s.completed).length) {
+      if (isCompleted && newCompleted > completedSteps) {
         setCelebration({
           type: 'quest_complete',
           titleZh: '任務完成！',
           titleEn: 'Quest Completed!',
-          messageZh: `恭喜你完成了「${t(quest.titleKey)}」任務！`,
-          messageEn: `Congratulations on completing "${t(quest.titleKey)}"!`,
-          xpEarned: 50,
+          messageZh: `恭喜完成「${quest.titleZh}」！獲得 ${quest.xpReward} XP！`,
+          messageEn: `Congrats on completing "${quest.titleEn}"! Earned ${quest.xpReward} XP!`,
+          xpEarned: quest.xpReward,
         });
       }
     }
-
-    toast.success(language === 'zh' ? '進度已更新！' : 'Progress updated!');
+    toast.success(zh ? '進度已更新！' : 'Progress updated!');
   };
 
   const handleVideoWatched = () => {
     setVideoWatched(true);
     const firstUncompleted = steps.find(s => !s.completed);
     if (firstUncompleted) toggleStep(firstUncompleted.id);
-    toast.success(language === 'zh' ? '✅ 教學影片已完成！' : '✅ Tutorial watched!');
+    toast.success(zh ? '✅ 教學影片已完成！' : '✅ Tutorial watched!');
   };
 
-  const getDifficultyText = (diff: string) => {
-    return t(`difficulty.${diff}`);
+  const handleShareYoutube = () => {
+    if (!youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be')) {
+      toast.error(zh ? '請輸入有效的 YouTube 連結' : 'Please enter a valid YouTube URL');
+      return;
+    }
+    toast.success(zh ? '🎵 影片已分享！' : '🎵 Video shared!');
+    setShowYoutubeInput(false);
+    setYoutubeUrl('');
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-950">
       <Navigation />
 
-      <main className="lg:ml-20 pt-20 lg:pt-8 pb-20">
-        <div className="container max-w-6xl">
-          {/* Back Button */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="mb-6"
-          >
+      <main className="lg:ml-20 pt-20 lg:pt-8 pb-24">
+        <div className="max-w-4xl mx-auto px-4">
+
+          {/* Back */}
+          <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} className="mb-4">
             <Link href="/quests">
-              <Button variant="ghost" className="text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" className="text-gray-400 hover:text-white -ml-2">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                {t('action.back')}
+                {zh ? '任務地圖' : 'Quest Map'}
               </Button>
             </Link>
           </motion.div>
 
           {/* Quest Header */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="magic-card p-6 mb-8"
+            className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 mb-6"
           >
-            <div className="flex flex-col md:flex-row md:items-start gap-6">
-              <div className="w-20 h-20 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
-                <Target className="w-10 h-10 text-primary" />
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-xl bg-gray-800 flex items-center justify-center text-3xl shrink-0">
+                {quest.badgeIcon || '🎵'}
               </div>
-
-              <div className="flex-1">
-                <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
-                  {t(quest.titleKey)}
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl font-bold text-white mb-1">
+                  {zh ? quest.titleZh : quest.titleEn}
                 </h1>
-                <p className="text-muted-foreground mb-4">
-                  {t(quest.descKey)}
+                <p className="text-gray-400 text-sm mb-3">
+                  {zh ? quest.descZh : quest.descEn}
                 </p>
-                <div className="flex flex-wrap gap-4 text-sm">
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    {quest.duration}{t('misc.minutes')}
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <span className="flex items-center gap-1 text-gray-400">
+                    <Clock className="w-3 h-3" />
+                    {quest.duration}{zh ? ' 分鐘' : ' min'}
                   </span>
-                  <span className="flex items-center gap-1 text-accent">
-                    <Music className="w-4 h-4" />
-                    {getDifficultyText(quest.difficulty)}
+                  <span className={`flex items-center gap-1 ${diff.color}`}>
+                    <Target className="w-3 h-3" />
+                    {zh ? diff.labelZh : diff.labelEn}
                   </span>
-                  <span className="flex items-center gap-1 text-primary">
-                    <Award className="w-4 h-4" />
-                    {t('quest.earnExp')}
+                  <span className="flex items-center gap-1 text-yellow-400">
+                    <Award className="w-3 h-3" />
+                    +{quest.xpReward} XP
                   </span>
                 </div>
               </div>
-
+              {/* Progress circle */}
               <div className="text-center shrink-0">
-                <div className="relative w-20 h-20">
-                  <svg className="w-20 h-20 -rotate-90">
-                    <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="6" fill="none" className="text-secondary" />
-                    <circle cx="40" cy="40" r="35" stroke="currentColor" strokeWidth="6" fill="none"
-                      strokeDasharray={`${progress * 2.2} 220`}
-                      className="text-primary transition-all duration-500"
+                <div className="relative w-14 h-14">
+                  <svg className="w-14 h-14 -rotate-90">
+                    <circle cx="28" cy="28" r="23" stroke="currentColor" strokeWidth="4" fill="none" className="text-gray-800" />
+                    <circle cx="28" cy="28" r="23" stroke="currentColor" strokeWidth="4" fill="none"
+                      strokeDasharray={`${progress * 1.445} 144.5`}
+                      className="text-yellow-400 transition-all duration-500"
                     />
                   </svg>
-                  <span className="absolute inset-0 flex items-center justify-center font-display font-bold text-lg text-primary">
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-yellow-400">
                     {Math.round(progress)}%
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {completedSteps}/{steps.length} {t('misc.step')}
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{completedSteps}/{steps.length}</p>
               </div>
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="w-full grid grid-cols-3 mb-4">
-                    <TabsTrigger value="video" className="flex items-center gap-2">
-                      <Play className="w-4 h-4" />
-                      {t('quest.video')}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main */}
+            <div className="lg:col-span-2 space-y-6">
+
+              {/* Tabs */}
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="w-full grid grid-cols-3 bg-gray-900/60 border border-gray-800 mb-4">
+                    <TabsTrigger value="video" className="text-xs">
+                      <Play className="w-3 h-3 mr-1" />
+                      {zh ? '影片' : 'Video'}
                     </TabsTrigger>
-                    <TabsTrigger value="metronome" className="flex items-center gap-2">
-                      <Music className="w-4 h-4" />
-                      {t('tools.metronome')}
+                    <TabsTrigger value="metronome" className="text-xs">
+                      <Music className="w-3 h-3 mr-1" />
+                      {zh ? '節拍器' : 'Metronome'}
                     </TabsTrigger>
-                    <TabsTrigger value="recorder" className="flex items-center gap-2">
-                      <Wrench className="w-4 h-4" />
-                      {t('tools.recorder')}
+                    <TabsTrigger value="recorder" className="text-xs">
+                      <Wrench className="w-3 h-3 mr-1" />
+                      {zh ? '錄音' : 'Recorder'}
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="video" className="mt-0">
-                    <div className="magic-card overflow-hidden">
+                  <TabsContent value="video">
+                    <div className="bg-gray-900/60 border border-gray-800 rounded-2xl overflow-hidden">
                       <div className="aspect-video bg-black relative">
-                        <iframe
-                          src={quest.videoUrl}
-                          title={t(quest.titleKey)}
-                          className="absolute inset-0 w-full h-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
+                        {quest.videoUrl.includes('coming-soon') ? (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <div className="text-4xl mb-3">🎬</div>
+                            <p className="text-gray-400 text-sm">{zh ? '影片即將上線' : 'Video coming soon'}</p>
+                          </div>
+                        ) : (
+                          <iframe
+                            src={quest.videoUrl}
+                            title={zh ? quest.titleZh : quest.titleEn}
+                            className="absolute inset-0 w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        )}
                       </div>
-                      <div className="p-4 flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground flex items-center gap-2">
-                          <Play className="w-4 h-4" />
-                          {t('quest.video')}
+                      <div className="p-3 flex items-center justify-between">
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <Play className="w-3 h-3" />
+                          {zh ? '教學影片' : 'Tutorial Video'}
                         </span>
                         {videoWatched ? (
-                          <span className="flex items-center gap-2 text-green-400 text-sm font-medium">
-                            <CheckCircle className="w-4 h-4" />
-                            {language === 'zh' ? '已觀看完畢' : 'Watched'}
+                          <span className="flex items-center gap-1 text-green-400 text-xs font-medium">
+                            <CheckCircle className="w-3 h-3" />
+                            {zh ? '已看完' : 'Watched'}
                           </span>
                         ) : (
                           <Button
-                            variant="outline"
                             size="sm"
-                            className="border-primary text-primary hover:bg-primary hover:text-black"
+                            variant="outline"
+                            className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 text-xs h-7 px-3"
                             onClick={handleVideoWatched}
                           >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            {language === 'zh' ? '我看完了' : 'Mark as watched'}
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            {zh ? '我看完了' : 'Mark watched'}
                           </Button>
                         )}
                       </div>
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="metronome" className="mt-0">
+                  <TabsContent value="metronome">
                     <Metronome defaultBpm={80} />
                   </TabsContent>
 
-                  <TabsContent value="recorder" className="mt-0">
+                  <TabsContent value="recorder">
                     <AudioRecorder />
                   </TabsContent>
                 </Tabs>
@@ -353,147 +352,200 @@ export default function QuestDetail() {
 
               {/* Steps */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="magic-card p-6"
+                className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5"
               >
-                <h2 className="font-display text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary" />
-                  {t('quest.steps')}
+                <h2 className="font-bold text-white mb-4 flex items-center gap-2">
+                  <Target className="w-4 h-4 text-yellow-400" />
+                  {zh ? '任務步驟' : 'Quest Steps'}
                 </h2>
-
-                <div className="space-y-4">
-                  {steps.map((step, index) => (
+                <div className="space-y-2">
+                  {steps.map((step, i) => (
                     <motion.div
                       key={step.id}
-                      initial={{ opacity: 0, x: -10 }}
+                      initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + index * 0.1 }}
+                      transition={{ delay: 0.25 + i * 0.05 }}
                       onClick={() => toggleStep(step.id)}
                       className={`
-                        flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-all
+                        flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-all
                         ${step.completed
-                          ? 'bg-green-500/10 border border-green-500/30'
-                          : 'bg-secondary/50 hover:bg-secondary'
+                          ? 'bg-green-500/10 border border-green-500/20'
+                          : 'bg-gray-800/50 hover:bg-gray-800 border border-transparent'
                         }
                       `}
                     >
                       <div className={`
-                        w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all
-                        ${step.completed
-                          ? 'bg-green-500 text-white'
-                          : 'bg-muted text-muted-foreground'
-                        }
+                        w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold
+                        ${step.completed ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-400'}
                       `}>
-                        {step.completed ? (
-                          <CheckCircle className="w-5 h-5" />
-                        ) : (
-                          <span className="font-semibold">{step.id}</span>
-                        )}
+                        {step.completed ? <CheckCircle className="w-4 h-4" /> : step.id}
                       </div>
                       <div>
-                        <h3 className={`font-semibold ${step.completed ? 'text-green-400' : 'text-foreground'}`}>
-                          {t(step.titleKey)}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {t(step.descKey)}
+                        <p className={`text-sm font-medium ${step.completed ? 'text-green-400' : 'text-white'}`}>
+                          {zh ? step.titleZh : step.titleEn}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {zh ? step.descZh : step.descEn}
                         </p>
                       </div>
                     </motion.div>
                   ))}
                 </div>
-
-                <div className="mt-6">
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">{t('quest.totalProgress')}</span>
-                    <span className="text-primary font-semibold">{Math.round(progress)}%</span>
+                <div className="mt-4">
+                  <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                    <span>{zh ? '整體進度' : 'Overall Progress'}</span>
+                    <span className="text-yellow-400 font-medium">{Math.round(progress)}%</span>
                   </div>
-                  <Progress value={progress} className="h-2" />
+                  <Progress value={progress} className="h-1.5" />
                 </div>
               </motion.div>
+
+              {/* Comments - Pro only */}
+              {canInteract && (
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                  <CommentSection questId={questId} />
+                </motion.div>
+              )}
+
+              {!canInteract && isAuthenticated && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="bg-gray-900/40 border border-gray-800 rounded-2xl p-4 text-center"
+                >
+                  <Lock className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">
+                    {zh ? '互動功能僅正式版用戶可使用' : 'Interactive features are for Pro users only'}
+                  </p>
+                </motion.div>
+              )}
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-4">
+
               {/* Tips */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="magic-card p-6"
+                transition={{ delay: 0.2 }}
+                className="bg-gray-900/60 border border-gray-800 rounded-2xl p-4"
               >
-                <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-                  <MessageCircle className="w-5 h-5 text-accent" />
-                  {t('quest.tips')}
-                </h2>
-                <ul className="space-y-3">
-                  {quest.tipKeys.map((tipKey, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <span className="text-primary mt-1">•</span>
-                      {t(tipKey)}
+                <h3 className="font-bold text-white mb-3 flex items-center gap-2 text-sm">
+                  <MessageCircle className="w-4 h-4 text-yellow-400" />
+                  {zh ? '老師小提示' : 'Teacher Tips'}
+                </h3>
+                <ul className="space-y-2">
+                  {(zh ? quest.tipsZh : quest.tipsEn).map((tip, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
+                      <span className="text-yellow-400 mt-0.5 shrink-0">•</span>
+                      {tip}
                     </li>
                   ))}
                 </ul>
               </motion.div>
 
-              {/* Upload - 即將推出 */}
+              {/* YouTube Share - Pro only */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="magic-card p-6"
+                transition={{ delay: 0.3 }}
+                className="bg-gray-900/60 border border-gray-800 rounded-2xl p-4"
               >
-                <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-primary" />
-                  {t('quest.uploadSection')}
-                </h2>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {language === 'zh' ? '影片上傳功能即將推出，敬請期待！' : 'Video upload coming soon!'}
-                </p>
-                <Button disabled className="w-full opacity-50 cursor-not-allowed">
-                  <Upload className="w-4 h-4 mr-2" />
-                  {language === 'zh' ? '即將推出' : 'Coming Soon'}
-                </Button>
+                <h3 className="font-bold text-white mb-2 flex items-center gap-2 text-sm">
+                  <Youtube className="w-4 h-4 text-red-400" />
+                  {zh ? '分享你的練習' : 'Share Your Practice'}
+                </h3>
+                {canInteract ? (
+                  showYoutubeInput ? (
+                    <div className="space-y-2">
+                      <input
+                        type="url"
+                        value={youtubeUrl}
+                        onChange={e => setYoutubeUrl(e.target.value)}
+                        placeholder="https://youtube.com/..."
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-yellow-500"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleShareYoutube} className="flex-1 bg-red-500 hover:bg-red-400 text-white text-xs h-7">
+                          {zh ? '分享' : 'Share'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowYoutubeInput(false)} className="flex-1 border-gray-700 text-gray-400 text-xs h-7">
+                          {zh ? '取消' : 'Cancel'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full border-gray-700 text-gray-300 hover:border-red-500/50 hover:text-red-400 text-xs"
+                      onClick={() => setShowYoutubeInput(true)}
+                    >
+                      <Youtube className="w-3 h-3 mr-2" />
+                      {zh ? '貼上 YouTube 連結' : 'Paste YouTube Link'}
+                    </Button>
+                  )
+                ) : (
+                  <div className="text-center py-2">
+                    <Lock className="w-5 h-5 text-gray-600 mx-auto mb-1" />
+                    <p className="text-xs text-gray-600">{zh ? '正式版功能' : 'Pro feature'}</p>
+                  </div>
+                )}
               </motion.div>
 
-              {/* Comments Section */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-              >
-                <CommentSection questId={questId} />
-              </motion.div>
-
-              {/* Complete Button */}
+              {/* Complete badge */}
               {progress === 100 && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="magic-card p-6 text-center glow-gold"
+                  className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/40 rounded-2xl p-4 text-center"
                 >
-                  <Award className="w-12 h-12 text-primary mx-auto mb-4" />
-                  <h3 className="font-display text-lg font-bold text-foreground mb-2">
-                    {t('quest.congratulations')}
+                  <div className="text-4xl mb-2">{quest.badgeIcon || '🏆'}</div>
+                  <h3 className="font-bold text-yellow-400 mb-1 text-sm">
+                    {zh ? '任務完成！' : 'Quest Complete!'}
                   </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {t('quest.allStepsComplete')}
+                  <p className="text-xs text-gray-400 mb-3">
+                    +{quest.xpReward} XP {zh ? '已獲得' : 'earned'}
                   </p>
-                  <Button className="w-full bg-gradient-to-r from-primary to-accent">
-                    {t('quest.submit')}
-                  </Button>
+                  <Link href="/quests">
+                    <Button size="sm" className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs">
+                      {zh ? '繼續下一關' : 'Next Quest'}
+                    </Button>
+                  </Link>
                 </motion.div>
               )}
+
+              {/* Course link */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="bg-gray-900/40 border border-gray-800 rounded-2xl p-4"
+              >
+                <p className="text-xs text-gray-500 mb-2">
+                  {zh ? '想要更深入的學習？' : 'Want to learn more?'}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-gray-700 text-gray-300 hover:border-yellow-500/50 hover:text-yellow-400 text-xs"
+                  onClick={() => window.open('https://fluteonline.myrflute.com', '_blank')}
+                >
+                  <ExternalLink className="w-3 h-3 mr-2" />
+                  {zh ? '前往線上課程平台' : 'Go to Online Course Platform'}
+                </Button>
+              </motion.div>
             </div>
           </div>
         </div>
       </main>
 
-      <AchievementCelebration
-        celebration={celebration}
-        onClose={() => setCelebration(null)}
-      />
+      <AchievementCelebration celebration={celebration} onClose={() => setCelebration(null)} />
     </div>
   );
 }
